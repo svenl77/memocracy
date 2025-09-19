@@ -1,0 +1,39 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Poll {
+  id           String   @id @default(cuid())
+  topic        String
+  options      String
+  startAt      DateTime
+  endAt        DateTime
+  tokenCA      String?  // Contract Address for token holder verification
+  createdAt    DateTime @default(now())
+  votes        Vote[]
+}
+
+model Vote {
+  id        String   @id @default(cuid())
+  pollId    String
+  wallet    String
+  choice    String
+  sig       String
+  signedAt  DateTime
+  createdAt DateTime @default(now())
+  poll      Poll     @relation(fields: [pollId], references: [id])
+  @@unique([pollId, wallet])
+}
+
+model Nonce {
+  id         String   @id @default(cuid())
+  wallet     String
+  value      String   @unique
+  createdAt  DateTime @default(now())
+  consumedAt DateTime?
+}
