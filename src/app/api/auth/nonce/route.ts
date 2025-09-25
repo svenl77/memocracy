@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
+import crypto from "crypto";
 
 const nonceSchema = z.object({
   wallet: z.string().min(1),
@@ -11,9 +12,13 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { wallet } = nonceSchema.parse(body);
 
-    // Generate a random nonce
-    const nonce = Math.random().toString(36).substring(2, 15) + 
-                  Math.random().toString(36).substring(2, 15);
+    // Generate a cryptographically secure nonce
+    const nonce = crypto.randomBytes(32).toString("base64url");
+
+    // Remove previously issued nonces for the wallet to prevent reuse
+    await prisma.nonce.deleteMany({
+      where: { wallet },
+    });
 
     // Store nonce in database
     await prisma.nonce.create({
