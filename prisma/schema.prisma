@@ -37,3 +37,16 @@ model Nonce {
   createdAt  DateTime @default(now())
   consumedAt DateTime?
 }
+
+model LeaderboardEntry {
+  id        String   @id @default(cuid())
+  wallet    String   @unique
+  username  String
+  score     Int
+  signature String
+  nonce     String
+  message   String
+  signedAt  DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

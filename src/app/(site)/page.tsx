@@ -63,12 +63,20 @@ export default function HomePage() {
         <p className="text-gray-600 text-lg">
           Discover and participate in token-gated community governance for your favorite tokens
         </p>
-        <button
-          onClick={fetchCoins}
-          className="mt-4 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all duration-200 shadow-lg hover:shadow-xl"
-        >
-          🔄 Refresh Communities
-        </button>
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+          <button
+            onClick={fetchCoins}
+            className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all duration-200 shadow-lg hover:shadow-xl"
+          >
+            🔄 Refresh Communities
+          </button>
+          <Link
+            href="/leaderboard"
+            className="px-6 py-3 border border-blue-200 text-blue-600 rounded-xl hover:bg-blue-50 transition-all duration-200 shadow-sm"
+          >
+            🏆 View Leaderboard
+          </Link>
+        </div>
       </div>
 
       {coins.length === 0 ? (
