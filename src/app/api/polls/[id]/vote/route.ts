@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSessionWallet } from "@/lib/session";
+import { createVoteLoginMessage } from "@/lib/signingMessages";
 import { verifySolanaSignature } from "@/lib/verifySolanaSignature";
 import { z } from "zod";
 
@@ -66,10 +67,11 @@ export async function POST(
     }
 
     // Verify signature
+    const message = createVoteLoginMessage(nonce);
     const isValid = verifySolanaSignature({
       walletBase58: sessionWallet,
-      nonce,
       signatureBase58: signature,
+      message,
     });
 
     if (!isValid) {
