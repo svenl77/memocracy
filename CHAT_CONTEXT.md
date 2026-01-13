@@ -181,8 +181,10 @@ npm run dev
 
 ### Known Bugs
 - ⚠️ **FOUNDING WALLET SECTION APPEARS TWICE** on coin detail page (`/coin/[ca]`)
-  - Check `src/app/coin/[ca]/page.tsx` for duplicate `FoundingWalletCard` rendering
-  - Check if API returns duplicates or if component renders twice
+  - **LOCATION:** `src/app/coin/[ca]/page.tsx`
+  - **PROBLEM:** Lines 534-551 and 553-570 both render the same "Founding Wallets Section"
+  - **SOLUTION:** Remove one of the duplicate sections (keep lines 534-551, delete 553-570)
+  - **ROOT CAUSE:** Code duplication - same conditional block appears twice
 
 ---
 

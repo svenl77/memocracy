@@ -16,8 +16,16 @@ Ich arbeite an einer **Solana Memecoin Community Platform** (Next.js 14, TypeScr
 
 ## 🔍 Problem-Analyse Workflow
 
+### ⚠️ HINWEIS: Problem bereits identifiziert!
+**Die "Founding Wallets Section" erscheint ZWEIMAL in `src/app/coin/[ca]/page.tsx`:**
+- **Erste Section:** Zeilen 534-551
+- **Zweite Section (DUPLIKAT):** Zeilen 553-570
+
+**Lösung:** Entferne die zweite Section (Zeilen 553-570), behalte die erste (534-551).
+
 ### Schritt 1: Verstehe die Coin Detail Page
 - Lies `src/app/coin/[ca]/page.tsx` komplett
+- **FOKUS:** Zeilen 530-575 - hier ist das Duplikat
 - Suche nach allen Stellen wo `FoundingWallet` oder `foundingWallet` vorkommt
 - Prüfe wie `coinData.foundingWallets` verwendet wird
 
