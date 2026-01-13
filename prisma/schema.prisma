@@ -7,15 +7,73 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Coin {
+  id         String          @id @default(cuid())
+  mint       String          @unique
+  symbol     String
+  name       String
+  hidden     Boolean         @default(false) // Admin-only: hide inappropriate coins
+  createdAt  DateTime        @default(now())
+  polls      Poll[]
+  wallets    ProjectWallet[]
+  trustScore TrustScore?
+  votes      CoinVote[]
+}
+
+model ProjectWallet {
+  id        String   @id @default(cuid())
+  address   String   @unique
+  label     String
+  coinId    String?
+  createdAt DateTime @default(now())
+  polls     Poll[]
+  coin      Coin?    @relation(fields: [coinId], references: [id])
+
+  // Founding Wallet fields
+  type                   String    @default("STANDARD") // STANDARD or FOUNDING
+  description            String?
+  fundingGoalUSD         Float?
+  fundingGoalLamports    String?
+  status                 String    @default("ACTIVE") // ACTIVE, COMPLETED, CANCELLED, FUNDED
+  currentBalanceUSD      Float     @default(0)
+  currentBalanceLamports String    @default("0")
+  completedAt            DateTime?
+  creatorWallet          String?
+
+  // Relations
+  transactions FoundingWalletTransaction[]
+  contributors FoundingWalletContributor[]
+  proposals    FoundingWalletProposal[]
+  votes        FoundingWalletVote[]
+  comments     FoundingWalletComment[]
+  trustScore   FoundingWalletTrustScore?
+
+  @@index([coinId])
+  @@index([type])
+  @@index([status])
+}
+
 model Poll {
-  id           String   @id @default(cuid())
-  topic        String
-  options      String
-  startAt      DateTime
-  endAt        DateTime
-  tokenCA      String?  // Contract Address for token holder verification
-  createdAt    DateTime @default(now())
-  votes        Vote[]
+  id                      String         @id @default(cuid())
+  topic                   String
+  options                 String
+  pollType                String         @default("YES_NO") // YES_NO or MULTIPLE_CHOICE
+  allowMultiple           Boolean        @default(false)
+  maxSelections           Int? // null means no limit
+  startAt                 DateTime
+  endAt                   DateTime
+  tokenCA                 String?
+  accessMode              String         @default("COIN")
+  coinId                  String?
+  coinMinHold             String?
+  projectWalletId         String?
+  minContributionLamports String?
+  minContributionUSD      String?
+  contributionMint        String?
+  createdAt               DateTime       @default(now())
+  projectWallet           ProjectWallet? @relation(fields: [projectWalletId], references: [id])
+  coin                    Coin?          @relation(fields: [coinId], references: [id])
+  votes                   Vote[]
 }
 
 model Vote {
@@ -27,14 +85,15 @@ model Vote {
   signedAt  DateTime
   createdAt DateTime @default(now())
   poll      Poll     @relation(fields: [pollId], references: [id])
+
   @@unique([pollId, wallet])
 }
 
 model Nonce {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   wallet     String
-  value      String   @unique
-  createdAt  DateTime @default(now())
+  value      String    @unique
+  createdAt  DateTime  @default(now())
   consumedAt DateTime?
 }
 
@@ -49,4 +108,195 @@ model LeaderboardEntry {
   signedAt  DateTime
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model TrustScore {
+  id     String @id @default(cuid())
+  coinId String @unique
+  coin   Coin   @relation(fields: [coinId], references: [id])
+
+  // Overall Score & Tier
+  overallScore Int // 0-100
+  tier         String // DIAMOND, GOLD, SILVER, BRONZE, UNRATED
+
+  // Individual Scores (0-100 each)
+  maturityScore      Int @default(0)
+  securityScore      Int @default(0)
+  liquidityScore     Int @default(0)
+  tradingScore       Int @default(0)
+  stabilityScore     Int @default(0)
+  communitySentiment Int @default(0)
+
+  // Security Flags
+  mintDisabled   Boolean @default(false)
+  freezeDisabled Boolean @default(false)
+
+  // Key Metrics
+  contractAgeDays Int?
+  liquidityUsd    Float?
+  sellPressure24h Float?
+
+  // Timestamps
+  lastChecked DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Detailed JSON data
+  detailedData String? // JSON string with all details
+}
+
+model CoinVote {
+  id        String   @id @default(cuid())
+  coinId    String
+  coin      Coin     @relation(fields: [coinId], references: [id])
+  wallet    String
+  vote      String // "UP" or "DOWN"
+  sig       String // Wallet signature
+  signedAt  DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([coinId, wallet])
+  @@index([coinId])
+}
+
+model TokenMetadata {
+  id             String   @id @default(cuid())
+  mint           String   @unique
+  name           String?
+  symbol         String?
+  price          Float?
+  priceChange24h Float?
+  volume24h      Float?
+  marketCap      Float?
+  liquidity      Float?
+  image          String?
+  lastUpdated    DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([mint])
+  @@index([lastUpdated])
+}
+
+model FoundingWalletTransaction {
+  id               String        @id @default(cuid())
+  foundingWalletId String
+  foundingWallet   ProjectWallet @relation(fields: [foundingWalletId], references: [id], onDelete: Cascade)
+  signature        String        @unique
+  fromWallet       String
+  toWallet         String
+  amountLamports   String
+  amountUSD        Float?
+  tokenMint        String?
+  transactionType  String // DEPOSIT, WITHDRAWAL, REFUND
+  blockTime        Int?
+  slot             Int?
+  createdAt        DateTime      @default(now())
+
+  @@index([foundingWalletId])
+  @@index([fromWallet])
+  @@index([signature])
+}
+
+model FoundingWalletContributor {
+  id                       String        @id @default(cuid())
+  foundingWalletId         String
+  foundingWallet           ProjectWallet @relation(fields: [foundingWalletId], references: [id], onDelete: Cascade)
+  walletAddress            String
+  totalContributedUSD      Float         @default(0)
+  totalContributedLamports String        @default("0")
+  firstContributionAt      DateTime
+  lastContributionAt       DateTime
+  contributionCount        Int           @default(0)
+  isActive                 Boolean       @default(true)
+
+  @@unique([foundingWalletId, walletAddress])
+  @@index([foundingWalletId])
+  @@index([walletAddress])
+}
+
+model FoundingWalletProposal {
+  id               String        @id @default(cuid())
+  foundingWalletId String
+  foundingWallet   ProjectWallet @relation(fields: [foundingWalletId], references: [id], onDelete: Cascade)
+  creatorWallet    String
+  title            String
+  description      String
+  proposalType     String // WITHDRAWAL, REFUND, COMPLETION, CHANGE_GOAL
+  amountUSD        Float?
+  status           String        @default("PENDING") // PENDING, APPROVED, REJECTED, EXECUTED
+  votesFor         Int           @default(0)
+  votesAgainst     Int           @default(0)
+  totalVotes       Int           @default(0)
+  createdAt        DateTime      @default(now())
+  votingEndsAt     DateTime
+  executedAt       DateTime?
+
+  @@index([foundingWalletId])
+  @@index([status])
+  @@index([creatorWallet])
+}
+
+model FoundingWalletVote {
+  id               String        @id @default(cuid())
+  foundingWalletId String
+  foundingWallet   ProjectWallet @relation(fields: [foundingWalletId], references: [id], onDelete: Cascade)
+  proposalId       String?
+  walletAddress    String
+  voteType         String // PROPOSAL, WITHDRAWAL, REFUND, COMPLETION
+  choice           String // YES, NO, or option for multiple choice
+  signature        String
+  signedAt         DateTime
+  createdAt        DateTime      @default(now())
+
+  @@unique([proposalId, walletAddress])
+  @@index([foundingWalletId])
+  @@index([proposalId])
+  @@index([walletAddress])
+}
+
+model FoundingWalletComment {
+  id               String        @id @default(cuid())
+  foundingWalletId String
+  foundingWallet   ProjectWallet @relation(fields: [foundingWalletId], references: [id], onDelete: Cascade)
+  walletAddress    String
+  content          String
+  rating           Int? // 1-5 stars
+  isVisible        Boolean       @default(true)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@index([foundingWalletId])
+  @@index([walletAddress])
+  @@index([isVisible])
+}
+
+model FoundingWalletTrustScore {
+  id               String        @id @default(cuid())
+  foundingWalletId String        @unique
+  foundingWallet   ProjectWallet @relation(fields: [foundingWalletId], references: [id], onDelete: Cascade)
+
+  // Overall Score & Tier
+  overallScore Int // 0-100
+  tier         String // DIAMOND, GOLD, SILVER, BRONZE, UNRATED
+
+  // Individual Scores (0-100 each)
+  transparencyScore Int @default(0)
+  executionScore    Int @default(0)
+  communityScore    Int @default(0)
+
+  // Metrics
+  totalContributors     Int    @default(0)
+  totalContributionsUSD Float  @default(0)
+  completionRate        Float? // 0-1
+  averageRating         Float? // 1-5
+
+  // Timestamps
+  lastChecked DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Detailed JSON data
+  detailedData String? // JSON string with all details
 }

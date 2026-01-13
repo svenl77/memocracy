@@ -66,7 +66,10 @@ function getTokenImageUrl(tokenAddress: string, symbol?: string): string {
   return `/api/token-image/${tokenAddress}`;
 }
 
-export async function getTokenData(tokenAddress: string): Promise<{
+// Cache duration: 5 minutes for price data (volatile)
+const CACHE_DURATION_MS = 5 * 60 * 1000;
+
+export async function getTokenData(tokenAddress: string, useCache: boolean = true): Promise<{
   name: string;
   symbol: string;
   price: number;
@@ -75,10 +78,50 @@ export async function getTokenData(tokenAddress: string): Promise<{
   marketCap?: number;
   liquidity?: number;
   image?: string;
+  txns?: {
+    h24: { buys: number; sells: number };
+    h1: { buys: number; sells: number };
+  };
+  pairCreatedAt?: number;
 } | null> {
+  // Try to get from cache first
+  if (useCache) {
+    try {
+      const { prisma } = await import("@/lib/db");
+      const cached = await prisma.tokenMetadata.findUnique({
+        where: { mint: tokenAddress },
+      });
+
+      if (cached && cached.lastUpdated) {
+        const cacheAge = Date.now() - new Date(cached.lastUpdated).getTime();
+        if (cacheAge < CACHE_DURATION_MS && cached.price !== null) {
+          // Return cached data if fresh
+          return {
+            name: cached.name || "Unknown Token",
+            symbol: cached.symbol || "UNK",
+            price: cached.price || 0,
+            priceChange24h: cached.priceChange24h || 0,
+            volume24h: cached.volume24h || 0,
+            marketCap: cached.marketCap || undefined,
+            liquidity: cached.liquidity || undefined,
+            image: cached.image || undefined,
+          };
+        }
+      }
+    } catch (error) {
+      // Silently continue to fetch from API if cache read fails
+      // Continue to fetch from API
+    }
+  }
+
+  // Fetch from DexScreener API
   try {
     const response = await fetch(
-      `https://api.dexscreener.com/latest/dex/tokens/${tokenAddress}`
+      `https://api.dexscreener.com/latest/dex/tokens/${tokenAddress}`,
+      {
+        // Add timeout to prevent hanging
+        signal: AbortSignal.timeout(10000), // 10 second timeout
+      }
     );
     
     if (!response.ok) {
@@ -101,7 +144,7 @@ export async function getTokenData(tokenAddress: string): Promise<{
     // Use known token data if available, otherwise use API data
     const knownToken = KNOWN_TOKENS[tokenAddress];
     
-    return {
+    const tokenData = {
       name: knownToken?.name || bestPair.baseToken.name || "Unknown Token",
       symbol: knownToken?.symbol || bestPair.baseToken.symbol || "UNK",
       price: parseFloat(bestPair.priceUsd) || 0,
@@ -110,9 +153,72 @@ export async function getTokenData(tokenAddress: string): Promise<{
       marketCap: bestPair.marketCap,
       liquidity: bestPair.liquidity?.usd,
       image: bestPair.baseToken.image || getTokenImageUrl(bestPair.baseToken.address, bestPair.baseToken.symbol),
+      txns: bestPair.txns,
+      pairCreatedAt: bestPair.pairCreatedAt,
     };
+
+    // Save to cache (async, don't wait)
+    if (useCache) {
+      try {
+        const { prisma } = await import("@/lib/db");
+        await prisma.tokenMetadata.upsert({
+          where: { mint: tokenAddress },
+          update: {
+            name: tokenData.name,
+            symbol: tokenData.symbol,
+            price: tokenData.price,
+            priceChange24h: tokenData.priceChange24h,
+            volume24h: tokenData.volume24h,
+            marketCap: tokenData.marketCap,
+            liquidity: tokenData.liquidity,
+            image: tokenData.image,
+            lastUpdated: new Date(),
+          },
+          create: {
+            mint: tokenAddress,
+            name: tokenData.name,
+            symbol: tokenData.symbol,
+            price: tokenData.price,
+            priceChange24h: tokenData.priceChange24h,
+            volume24h: tokenData.volume24h,
+            marketCap: tokenData.marketCap,
+            liquidity: tokenData.liquidity,
+            image: tokenData.image,
+          },
+        });
+      } catch (error) {
+        // Silently continue if caching fails (non-critical)
+      }
+    }
+
+    return tokenData;
   } catch (error) {
-    console.error("Failed to fetch token data from DexScreener:", error);
+    // Error will be logged by caller if needed
+    
+    // Try to return stale cache if API fails
+    if (useCache) {
+      try {
+        const { prisma } = await import("@/lib/db");
+        const cached = await prisma.tokenMetadata.findUnique({
+          where: { mint: tokenAddress },
+        });
+        if (cached && cached.price !== null) {
+          return {
+            name: cached.name || "Unknown Token",
+            symbol: cached.symbol || "UNK",
+            price: cached.price || 0,
+            priceChange24h: cached.priceChange24h || 0,
+            volume24h: cached.volume24h || 0,
+            marketCap: cached.marketCap || undefined,
+            liquidity: cached.liquidity || undefined,
+            image: cached.image || undefined,
+          };
+        }
+      } catch (cacheError) {
+        // Ignore cache errors
+      }
+    }
+    
     return null;
   }
 }

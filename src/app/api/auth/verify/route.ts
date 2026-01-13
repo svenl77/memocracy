@@ -4,6 +4,9 @@ import { setSession } from "@/lib/session";
 import { createVoteLoginMessage } from "@/lib/signingMessages";
 import { verifySolanaSignature } from "@/lib/verifySolanaSignature";
 import { z } from "zod";
+import { rateLimitMiddleware, rateLimitPresets } from "@/lib/rateLimit";
+import { logger, log } from "@/lib/logger";
+import { safeErrorResponse } from "@/lib/apiHelpers";
 
 const verifySchema = z.object({
   wallet: z.string().min(1),
@@ -12,6 +15,12 @@ const verifySchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  // Apply rate limiting (strict for auth endpoints)
+  const rateLimitResponse = rateLimitMiddleware(request, rateLimitPresets.strict);
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   try {
     const body = await request.json();
     const { wallet, nonce, signature } = verifySchema.parse(body);
@@ -22,6 +31,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!nonceRecord || nonceRecord.consumedAt || nonceRecord.wallet !== wallet) {
+      log.warn("Invalid nonce attempt", { wallet, nonce });
       return NextResponse.json(
         { error: "Invalid or expired nonce" },
         { status: 400 }
@@ -37,6 +47,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!isValid) {
+      log.warn("Invalid signature attempt", { wallet });
       return NextResponse.json(
         { error: "Invalid signature" },
         { status: 400 }
@@ -52,12 +63,14 @@ export async function POST(request: NextRequest) {
     // Set session
     setSession(wallet);
 
+    log.info("User authenticated", { wallet });
+
     return NextResponse.json({ success: true, wallet });
   } catch (error) {
-    console.error("Verification error:", error);
-    return NextResponse.json(
-      { error: "Failed to verify signature" },
-      { status: 500 }
-    );
+    logger.error("Verification error", {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    return safeErrorResponse(error, "Failed to verify signature");
   }
 }

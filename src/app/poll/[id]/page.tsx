@@ -12,6 +12,7 @@ import { PhantomWalletAdapter } from "@solana/wallet-adapter-wallets";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+import Header from "@/components/Header";
 
 // Import wallet adapter CSS
 require("@solana/wallet-adapter-react-ui/styles.css");
@@ -20,9 +21,34 @@ interface Poll {
   id: string;
   topic: string;
   options: string[];
+  pollType: string;
+  allowMultiple: boolean;
+  maxSelections?: number;
   startAt: string;
   endAt: string;
   tokenCA?: string;
+  accessMode: string;
+  coin?: {
+    id: string;
+    mint: string;
+    symbol: string;
+    name: string;
+  };
+  coinMinHold?: string;
+  projectWallet?: {
+    id: string;
+    address: string;
+    label: string;
+    coinId?: string;
+    coin?: {
+      id: string;
+      mint: string;
+      symbol: string;
+      name: string;
+    };
+  };
+  minContributionLamports?: string;
+  contributionMint?: string;
   results: Array<{
     option: string;
     count: number;
@@ -34,18 +60,24 @@ const wallets = [new PhantomWalletAdapter()];
 
 function PollContent() {
   const params = useParams();
-  const { publicKey, signMessage } = useWallet();
+  const { publicKey, signMessage, disconnect } = useWallet();
   const [poll, setPoll] = useState<Poll | null>(null);
   const [loading, setLoading] = useState(true);
   const [voting, setVoting] = useState(false);
-  const [selectedChoice, setSelectedChoice] = useState("");
-  const [userVote, setUserVote] = useState<string | null>(null);
+  const [selectedChoice, setSelectedChoice] = useState<string[]>([]);
+  const [userVote, setUserVote] = useState<string | string[] | null>(null);
   const [error, setError] = useState("");
   const [tokenBalance, setTokenBalance] = useState<{
     hasToken: boolean;
     balance: number;
     loading: boolean;
   }>({ hasToken: false, balance: 0, loading: false });
+  const [eligibility, setEligibility] = useState<{
+    eligible: boolean;
+    reasons: string[];
+    isFoundingWallet?: boolean;
+    loading: boolean;
+  }>({ eligible: false, reasons: [], loading: false });
 
   useEffect(() => {
     if (params.id) {
@@ -54,10 +86,10 @@ function PollContent() {
   }, [params.id]);
 
   useEffect(() => {
-    if (publicKey && poll?.tokenCA) {
-      checkTokenBalance();
+    if (publicKey && poll) {
+      checkEligibility();
     }
-  }, [publicKey, poll?.tokenCA]);
+  }, [publicKey, poll]);
 
   const fetchPoll = async () => {
     try {
@@ -72,38 +104,39 @@ function PollContent() {
     }
   };
 
-  const checkTokenBalance = async () => {
-    if (!publicKey || !poll?.tokenCA) return;
+  const checkEligibility = async () => {
+    if (!publicKey || !poll) return;
 
-    setTokenBalance(prev => ({ ...prev, loading: true }));
+    setEligibility(prev => ({ ...prev, loading: true }));
     try {
-      const response = await fetch("/api/check-token-balance", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          wallet: publicKey.toString(),
-          tokenCA: poll.tokenCA,
-        }),
-      });
-
+      const response = await fetch(`/api/polls/${poll.id}/eligibility?wallet=${publicKey.toString()}`);
+      
       if (response.ok) {
         const data = await response.json();
-        setTokenBalance({
-          hasToken: data.hasToken,
-          balance: data.balance,
+        setEligibility({
+          eligible: data.eligible,
+          reasons: data.reasons,
           loading: false,
         });
       } else {
-        setTokenBalance(prev => ({ ...prev, loading: false }));
+        setEligibility({
+          eligible: false,
+          reasons: ["Failed to check eligibility"],
+          loading: false,
+        });
       }
     } catch (error) {
-      console.error("Failed to check token balance:", error);
-      setTokenBalance(prev => ({ ...prev, loading: false }));
+      console.error("Failed to check eligibility:", error);
+      setEligibility({
+        eligible: false,
+        reasons: ["Failed to check eligibility"],
+        loading: false,
+      });
     }
   };
 
   const handleVote = async () => {
-    if (!publicKey || !signMessage || !selectedChoice) return;
+    if (!publicKey || !signMessage || selectedChoice.length === 0) return;
 
     setVoting(true);
     setError("");
@@ -139,7 +172,7 @@ function PollContent() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          choice: selectedChoice,
+          choice: poll?.allowMultiple ? selectedChoice : selectedChoice[0],
           nonce,
           signature: signatureBase64,
         }),
@@ -150,7 +183,7 @@ function PollContent() {
         throw new Error(errorData.error || "Failed to cast vote");
       }
 
-      setUserVote(selectedChoice);
+      setUserVote(poll?.allowMultiple ? selectedChoice : selectedChoice[0]);
       await fetchPoll(); // Refresh poll data
     } catch (error) {
       console.error("Voting error:", error);
@@ -175,9 +208,9 @@ function PollContent() {
     const isActive = getPollStatus() === "active";
     const hasWallet = !!publicKey;
     const hasntVoted = !userVote;
-    const hasTokenOrNoRequirement = !poll?.tokenCA || tokenBalance.hasToken;
+    const isEligible = eligibility.eligible;
     
-    return isActive && hasWallet && hasntVoted && hasTokenOrNoRequirement;
+    return isActive && hasWallet && hasntVoted && isEligible;
   };
 
   if (loading) {
@@ -199,10 +232,30 @@ function PollContent() {
   const status = getPollStatus();
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+      <Header />
+      <div className="container mx-auto px-4 py-8">
+        <div className="max-w-4xl mx-auto">
       <div className="bg-white rounded-lg shadow-md p-8">
         <div className="flex justify-between items-start mb-6">
-          <h1 className="text-3xl font-bold text-gray-900">{poll.topic}</h1>
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">{poll.topic}</h1>
+            <div className="flex items-center space-x-2 mt-2">
+              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                poll.pollType === "YES_NO" 
+                  ? "bg-blue-100 text-blue-800" 
+                  : "bg-purple-100 text-purple-800"
+              }`}>
+                {poll.pollType === "YES_NO" ? "📊 Yes/No Poll" : "📋 Multiple Choice"}
+              </span>
+              {poll.allowMultiple && (
+                <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                  ✓ Multiple Selection
+                  {poll.maxSelections && ` (max ${poll.maxSelections})`}
+                </span>
+              )}
+            </div>
+          </div>
           <span
             className={`px-3 py-1 rounded-full text-sm font-medium ${
               status === "active"
@@ -223,34 +276,174 @@ function PollContent() {
           </p>
         </div>
 
-        {poll.tokenCA && (
-          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded">
-            <h3 className="text-sm font-medium text-blue-800 mb-2">
-              Token Holder Verification
-            </h3>
-            <p className="text-sm text-blue-700 mb-2">
-              This poll is restricted to holders of:{" "}
-              <span className="font-mono bg-blue-100 px-2 py-1 rounded text-xs">
-                {poll.tokenCA.slice(0, 8)}...{poll.tokenCA.slice(-8)}
-              </span>
-            </p>
-            {publicKey && (
-              <div className="text-sm text-blue-700">
-                {tokenBalance.loading ? (
-                  <span>Checking token balance...</span>
-                ) : tokenBalance.hasToken ? (
-                  <span className="text-green-700">
-                    ✅ You hold {tokenBalance.balance} tokens - You can vote!
-                  </span>
-                ) : (
-                  <span className="text-red-700">
-                    ❌ You don't hold this token - Voting restricted
-                  </span>
-                )}
+        {/* Gate Badges */}
+        <div className="mb-6 space-y-3">
+          {poll.accessMode === "COIN" && poll.coin && (
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded">
+              <h3 className="text-sm font-medium text-blue-800 mb-2">
+                🪙 Coin Gate
+              </h3>
+              <p className="text-sm text-blue-700 mb-2">
+                This poll is restricted to holders of: <strong>{poll.coin.name} ({poll.coin.symbol})</strong>
+              </p>
+              <p className="text-xs text-blue-600">
+                Minimum hold: {poll.coinMinHold || "1"} {poll.coin.symbol}
+              </p>
+            </div>
+          )}
+
+          {poll.accessMode === "WALLET" && poll.projectWallet && (
+            <div className="p-4 bg-green-50 border border-green-200 rounded">
+              <h3 className="text-sm font-medium text-green-800 mb-2">
+                💳 Wallet Gate
+              </h3>
+              <p className="text-sm text-green-700 mb-2">
+                This poll is restricted to contributors to: <strong>{poll.projectWallet.label}</strong>
+              </p>
+              <p className="text-xs text-green-600">
+                Minimum contribution: {poll.minContributionLamports ? (parseInt(poll.minContributionLamports) / 1000000000).toFixed(2) : "0"} SOL
+              </p>
+              {poll.projectWallet.coin && (
+                <p className="text-xs text-green-600 mt-1">
+                  Also requires: {poll.coinMinHold || "1"} {poll.projectWallet.coin.symbol}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Eligibility Status */}
+          {publicKey && (
+            <div className="p-4 bg-gray-50 border border-gray-200 rounded">
+              <h3 className="text-sm font-medium text-gray-800 mb-2">
+                Your Eligibility Status
+              </h3>
+              <div className="text-xs text-gray-500 mb-2">
+                Connected wallet: {publicKey?.toString().slice(0, 8)}...{publicKey?.toString().slice(-8)}
               </div>
-            )}
-          </div>
-        )}
+              {eligibility.loading ? (
+                <div className="flex items-center space-x-2">
+                  <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                  <span className="text-sm text-gray-600">Checking eligibility...</span>
+                </div>
+              ) : eligibility.eligible ? (
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
+                      <span className="text-white text-xs">✓</span>
+                    </div>
+                    <span className="text-sm text-green-700 font-medium">
+                      ✅ You are eligible to vote!
+                    </span>
+                  </div>
+                  {eligibility.isFoundingWallet && (
+                    <div className="ml-6 p-2 bg-yellow-50 border border-yellow-200 rounded">
+                      <span className="text-xs text-yellow-800 font-medium">
+                        👑 Founding Wallet Owner - Special privileges granted
+                      </span>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-4 h-4 bg-red-500 rounded-full flex items-center justify-center">
+                      <span className="text-white text-xs">✗</span>
+                    </div>
+                    <span className="text-sm text-red-700 font-medium">
+                      ❌ You are not eligible to vote
+                    </span>
+                  </div>
+                  {eligibility.reasons.length > 0 && (
+                    <div className="ml-6">
+                      <ul className="text-xs text-red-600 space-y-1">
+                        {eligibility.reasons.map((reason, index) => (
+                          <li key={index}>• {reason}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  
+                  {/* Wallet Management & Donation Options */}
+                  <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <h4 className="text-sm font-medium text-blue-800 mb-3">
+                      💡 How to become eligible:
+                    </h4>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm text-blue-700 font-medium">Switch to a different wallet</p>
+                          <p className="text-xs text-blue-600">Connect a wallet that meets the requirements</p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            // Trigger wallet disconnect to allow reconnection
+                            disconnect();
+                          }}
+                          className="px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors"
+                        >
+                          Switch Wallet
+                        </button>
+                      </div>
+                      
+                      {poll?.projectWallet && poll?.minContributionUSD && (
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-blue-700 font-medium">Make a donation</p>
+                            <p className="text-xs text-blue-600">
+                              Contribute ${poll.minContributionUSD} USD to {poll.projectWallet.label}
+                            </p>
+                          </div>
+                          <button
+                            onClick={async () => {
+                              try {
+                                // Copy wallet address to clipboard
+                                await navigator.clipboard.writeText(poll.projectWallet.address);
+                                // Show a better notification
+                                const notification = document.createElement('div');
+                                notification.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+                                notification.textContent = 'Wallet address copied to clipboard!';
+                                document.body.appendChild(notification);
+                                setTimeout(() => {
+                                  document.body.removeChild(notification);
+                                }, 3000);
+                              } catch (err) {
+                                alert(`Wallet address: ${poll.projectWallet.address}`);
+                              }
+                            }}
+                            className="px-3 py-1 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 transition-colors"
+                          >
+                            Copy Address
+                          </button>
+                        </div>
+                      )}
+                      
+                      {poll?.coin && poll?.coinMinHold && (
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-blue-700 font-medium">Acquire {poll.coin.symbol} tokens</p>
+                            <p className="text-xs text-blue-600">
+                              Get at least {poll.coinMinHold} {poll.coin.symbol} tokens
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => {
+                              // Open DEX or token info
+                              const dexUrl = `https://dexscreener.com/solana/${poll.coin.mint}`;
+                              window.open(dexUrl, '_blank');
+                            }}
+                            className="px-3 py-1 bg-purple-600 text-white text-sm rounded-md hover:bg-purple-700 transition-colors"
+                          >
+                            View on DexScreener
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         {error && (
           <div className="mb-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
@@ -299,17 +492,37 @@ function PollContent() {
           <div className="border-t pt-6">
             <h3 className="text-lg font-semibold mb-4">Cast Your Vote</h3>
             <div className="space-y-3 mb-6">
+              {poll.allowMultiple && poll.maxSelections && (
+                <div className="text-sm text-gray-600 mb-4 p-3 bg-blue-50 rounded-lg">
+                  <strong>Multiple Choice:</strong> You can select up to {poll.maxSelections} option{poll.maxSelections > 1 ? 's' : ''}.
+                  {selectedChoice.length > 0 && (
+                    <span className="ml-2">({selectedChoice.length}/{poll.maxSelections} selected)</span>
+                  )}
+                </div>
+              )}
               {poll.options.map((option) => (
                 <label
                   key={option}
                   className="flex items-center space-x-3 cursor-pointer"
                 >
                   <input
-                    type="radio"
+                    type={poll.allowMultiple ? "checkbox" : "radio"}
                     name="choice"
                     value={option}
-                    checked={selectedChoice === option}
-                    onChange={(e) => setSelectedChoice(e.target.value)}
+                    checked={poll.allowMultiple ? selectedChoice.includes(option) : selectedChoice[0] === option}
+                    onChange={(e) => {
+                      if (poll.allowMultiple) {
+                        if (e.target.checked) {
+                          if (!poll.maxSelections || selectedChoice.length < poll.maxSelections) {
+                            setSelectedChoice([...selectedChoice, option]);
+                          }
+                        } else {
+                          setSelectedChoice(selectedChoice.filter(choice => choice !== option));
+                        }
+                      } else {
+                        setSelectedChoice([e.target.value]);
+                      }
+                    }}
                     className="w-4 h-4 text-blue-600"
                   />
                   <span className="text-gray-900">{option}</span>
@@ -318,7 +531,7 @@ function PollContent() {
             </div>
             <button
               onClick={handleVote}
-              disabled={!selectedChoice || voting}
+              disabled={selectedChoice.length === 0 || voting}
               className="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
               {voting ? "Voting..." : "Vote"}
@@ -335,19 +548,21 @@ function PollContent() {
           </div>
         )}
 
-        {publicKey && status === "active" && poll?.tokenCA && !tokenBalance.hasToken && !tokenBalance.loading && (
+        {publicKey && status === "active" && !eligibility.eligible && !eligibility.loading && (
           <div className="border-t pt-6">
             <div className="p-4 bg-yellow-50 border border-yellow-200 rounded">
               <h3 className="text-sm font-medium text-yellow-800 mb-2">
                 Voting Restricted
               </h3>
               <p className="text-sm text-yellow-700">
-                This poll is only available to holders of the specified token. 
-                You need to hold the token to participate in this vote.
+                You don't meet the requirements to vote on this poll. 
+                Check the eligibility status above for details.
               </p>
             </div>
           </div>
         )}
+        </div>
+        </div>
       </div>
     </div>
   );

@@ -10,6 +10,30 @@ export async function GET(
       where: { id: params.id },
       include: {
         votes: true,
+        coin: {
+          select: {
+            id: true,
+            mint: true,
+            symbol: true,
+            name: true,
+          },
+        },
+        projectWallet: {
+          select: {
+            id: true,
+            address: true,
+            label: true,
+            coinId: true,
+            coin: {
+              select: {
+                id: true,
+                mint: true,
+                symbol: true,
+                name: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -24,7 +48,7 @@ export async function GET(
     const options = JSON.parse(poll.options);
     const results = options.map((option: string) => ({
       option,
-      count: poll.votes.filter(vote => vote.choice === option).length,
+      count: poll.votes.filter((vote: any) => vote.choice === option).length,
     }));
 
     const totalVotes = poll.votes.length;
