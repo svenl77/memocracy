@@ -8,6 +8,7 @@ import TrustScorePreview from "@/components/trustScore/TrustScorePreview";
 import CoinVoteButtons from "@/components/coinVote/CoinVoteButtons";
 import FoundingWalletCard from "@/components/foundingWallet/FoundingWalletCard";
 import SocialLinks from "@/components/coin/SocialLinks";
+import FeeShareDisplay from "@/components/bags/FeeShareDisplay";
 
 interface TokenMetadata {
   mint: string;
@@ -469,6 +470,11 @@ export default function CoinDashboard() {
           </div>
         </div>
       </div>
+
+      {/* Bags Fee Share Display - Only for COIN mode */}
+      {coinData.pollType === "COIN" && coinData.tokenCA && (
+        <FeeShareDisplay tokenMint={coinData.tokenCA} />
+      )}
 
       {/* Trust Score Preview - Only for COIN mode */}
       {coinData.pollType === "COIN" && coinData.tokenCA && (

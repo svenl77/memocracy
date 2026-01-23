@@ -11,25 +11,82 @@ export async function GET(
     const identifier = params.ca;
 
     // First, try to find coin by mint address
+    // Use select to avoid including bagsFoundingWalletId which may not exist in DB
     let coin = await prisma.coin.findUnique({
       where: { mint: identifier },
-      include: {
+      select: {
+        id: true,
+        mint: true,
+        symbol: true,
+        name: true,
+        hidden: true,
+        createdAt: true,
         polls: {
-          include: {
+          select: {
+            id: true,
+            topic: true,
+            options: true,
+            pollType: true,
+            allowMultiple: true,
+            maxSelections: true,
+            startAt: true,
+            endAt: true,
+            tokenCA: true,
+            accessMode: true,
+            coinId: true,
+            coinMinHold: true,
+            projectWalletId: true,
+            minContributionLamports: true,
+            minContributionUSD: true,
+            contributionMint: true,
+            createdAt: true,
             votes: {
-              include: {
-                poll: true,
+              select: {
+                id: true,
+                wallet: true,
+                choice: true,
+                sig: true,
+                signedAt: true,
+                createdAt: true,
+                poll: {
+                  select: {
+                    id: true,
+                    topic: true,
+                  },
+                },
               },
             },
-            projectWallet: true,
+            projectWallet: {
+              select: {
+                id: true,
+                address: true,
+                label: true,
+              },
+            },
           },
           orderBy: {
             createdAt: "desc",
           },
         },
-        votes: true,
+        votes: {
+          select: {
+            id: true,
+            coinId: true,
+            wallet: true,
+            vote: true,
+            createdAt: true,
+          },
+        },
         trustScore: true,
-        wallets: true,
+        wallets: {
+          select: {
+            id: true,
+            address: true,
+            label: true,
+            coinId: true,
+            createdAt: true,
+          },
+        },
       },
     });
 

@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -77,8 +77,9 @@ model Poll {
   projectWallet           ProjectWallet?      @relation(fields: [projectWalletId], references: [id])
   coin                    Coin?               @relation(fields: [coinId], references: [id])
   votes                   Vote[]
-  BagsFoundingWallet      BagsFoundingWallet? @relation(fields: [bagsFoundingWalletId], references: [id])
-  bagsFoundingWalletId    String?
+  // BagsFoundingWallet relation - temporarily commented out until migration is run
+  // BagsFoundingWallet      BagsFoundingWallet? @relation(fields: [bagsFoundingWalletId], references: [id])
+  // bagsFoundingWalletId    String?
 }
 
 model Vote {
@@ -372,7 +373,7 @@ model BagsFoundingWallet {
   // Relations
   contributors BagsWalletContributor[]
   transactions BagsWalletTransaction[]
-  polls        Poll[] // Polls for this wallet (via coinId or projectWalletId)
+  // polls        Poll[] // Polls for this wallet - temporarily commented out until migration is run
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

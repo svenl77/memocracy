@@ -60,20 +60,21 @@ interface FeeShareResult {
   transaction: string; // Base58 encoded transaction
 }
 
-interface LifetimeFees {
-  tokenMint: string;
-  lifetimeFees: number;
-  totalVolume?: number;
-  totalTrades?: number;
+// LifetimeFees response is a string (lamports) according to Bags API docs
+type LifetimeFees = string; // String representation of lamports (for bigint support)
+
+// Creators response is an array directly
+interface Creator {
+  username: string;
+  pfp: string;
+  provider: string;
+  providerUsername: string | null;
+  royaltyBps: number; // Basis points (10000 = 100%)
+  isCreator: boolean;
+  wallet: string;
 }
 
-interface Creators {
-  tokenMint: string;
-  creators: Array<{
-    wallet: string;
-    share: number;
-  }>;
-}
+type Creators = Creator[]; // Array of creators
 
 interface ClaimStats {
   tokenMint: string;
@@ -125,6 +126,10 @@ export class BagsApiClient {
         headers,
       });
 
+      // Check content type before parsing
+      const contentType = response.headers.get("content-type") || "";
+      const isJson = contentType.includes("application/json");
+
       if (!response.ok) {
         const errorText = await response.text();
         // #region agent log
@@ -134,12 +139,34 @@ export class BagsApiClient {
           endpoint,
           status: response.status,
           statusText: response.statusText,
-          error: errorText,
+          error: errorText.substring(0, 200),
         });
+
+        // If it's a 404, the token might not be a Bags token
+        if (response.status === 404) {
+          return {
+            success: false,
+            error: "Token not found on Bags",
+          };
+        }
 
         return {
           success: false,
           error: `Bags API error: ${response.status} ${response.statusText}`,
+        };
+      }
+
+      // Handle non-JSON responses (e.g., HTML error pages)
+      if (!isJson) {
+        const text = await response.text();
+        logger.warn("Bags API returned non-JSON response", {
+          endpoint,
+          contentType,
+          preview: text.substring(0, 200),
+        });
+        return {
+          success: false,
+          error: "Bags API returned invalid response format",
         };
       }
 
@@ -257,11 +284,12 @@ export class BagsApiClient {
 
   /**
    * Get token lifetime fees
-   * GET /analytics/get-token-lifetime-fees
+   * GET /token-launch/lifetime-fees
+   * Returns a string (lamports) for bigint support
    */
-  async getTokenLifetimeFees(tokenMint: string): Promise<BagsApiResponse<LifetimeFees>> {
-    return this.request<LifetimeFees>(
-      `/analytics/get-token-lifetime-fees?tokenMint=${tokenMint}`,
+  async getTokenLifetimeFees(tokenMint: string): Promise<BagsApiResponse<string>> {
+    return this.request<string>(
+      `/token-launch/lifetime-fees?tokenMint=${tokenMint}`,
       {
         method: "GET",
       }
@@ -270,11 +298,11 @@ export class BagsApiClient {
 
   /**
    * Get token creators
-   * GET /analytics/get-token-launch-creators
+   * GET /token-launch/creator/v3
    */
   async getTokenCreators(tokenMint: string): Promise<BagsApiResponse<Creators>> {
     return this.request<Creators>(
-      `/analytics/get-token-launch-creators?tokenMint=${tokenMint}`,
+      `/token-launch/creator/v3?tokenMint=${tokenMint}`,
       {
         method: "GET",
       }
