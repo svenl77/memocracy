@@ -91,8 +91,6 @@ export async function GET(request: NextRequest) {
         _count: {
           select: {
             transactions: true,
-            proposals: true,
-            comments: true,
           },
         },
       },
@@ -123,8 +121,6 @@ export async function GET(request: NextRequest) {
         0
       ),
       transactionCount: wallet._count.transactions,
-      proposalCount: wallet._count.proposals,
-      commentCount: wallet._count.comments,
       trustScore: wallet.trustScore,
     }));
 

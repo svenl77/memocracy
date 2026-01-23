@@ -3,8 +3,8 @@ import "./globals.css";
 import WalletProvider from "@/components/WalletProvider";
 
 export const metadata: Metadata = {
-  title: "Memecoin Community Platform",
-  description: "Discover, vote for, and evaluate memecoin communities. See trust scores, community sentiment, and participate in governance.",
+  title: "Memocracy - AI-Powered Memecoin Intelligence",
+  description: "AI-powered analysis, community governance, and transparent funding for memecoin communities. Built for builders, trusted by holders.",
 };
 
 export default function RootLayout({

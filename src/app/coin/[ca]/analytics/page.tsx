@@ -121,7 +121,7 @@ export default function AnalyticsPage() {
           <div className="text-center py-12">
             <p className="text-red-500 text-lg mb-4">{error || 'Failed to load analytics'}</p>
             <button
-              onClick={fetchTrustScore}
+              onClick={() => fetchTrustScore()}
               className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700"
             >
               Retry

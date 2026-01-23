@@ -1,393 +1,691 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import Header from "@/components/Header";
-import SearchAndFilters, { FilterState } from "@/components/SearchAndFilters";
-
-interface TokenData {
-  name: string;
-  symbol: string;
-  price: number;
-  priceChange24h: number;
-  volume24h: number;
-  marketCap?: number;
-  liquidity?: number;
-  image?: string;
-}
-
-interface Coin {
-  id: string;
-  mint: string;
-  symbol: string;
-  name: string;
-  createdAt: string;
-  trustScore: number | null;
-  tier: string | null;
-  coinUpvotes: number;
-  coinDownvotes: number;
-  pollCount: number;
-  pollVotes: number;
-  uniqueVoters: number;
-  projectWalletCount: number;
-  latestPoll: string | null;
-  topics: string[];
-  tokenData: TokenData | null;
-}
-
-const getTierEmoji = (tier: string | null): string => {
-  if (!tier) return "❓";
-  switch (tier) {
-    case "DIAMOND":
-      return "💎";
-    case "GOLD":
-      return "🥇";
-    case "SILVER":
-      return "🥈";
-    case "BRONZE":
-      return "🥉";
-    default:
-      return "❓";
-  }
-};
-
-const getTierColor = (tier: string | null): string => {
-  if (!tier) return "from-gray-400 to-gray-600";
-  switch (tier) {
-    case "DIAMOND":
-      return "from-cyan-400 to-blue-600";
-    case "GOLD":
-      return "from-yellow-400 to-orange-500";
-    case "SILVER":
-      return "from-gray-300 to-gray-500";
-    case "BRONZE":
-      return "from-orange-400 to-orange-700";
-    default:
-      return "from-gray-400 to-gray-600";
-  }
-};
+import { ArrowRight, Brain, Shield, Users, TrendingUp, Zap, CheckCircle2, BarChart3, Wallet, Vote, Sparkles, Code, Globe, Copy, ExternalLink, Copy as CopyIcon, Check } from "lucide-react";
 
 export default function HomePage() {
-  const [allCoins, setAllCoins] = useState<Coin[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState<FilterState>({
-    search: "",
-    tier: "all",
-    scoreMin: 0,
-    scoreMax: 100,
-    sortBy: "score",
-    timeFilter: "all",
-    communityActivity: "all",
-  });
+  const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    fetchAllCoins();
-  }, []);
-
-  const fetchAllCoins = async () => {
-    try {
-      setLoading(true);
-      // Fetch all coins (we'll handle pagination client-side for filtering)
-      const response = await fetch(`/api/coins?page=1&limit=1000`);
-      
-      if (!response.ok) {
-        console.error("Failed to fetch coins:", response.status, response.statusText);
-        setAllCoins([]);
-        return;
-      }
-      
-      const data = await response.json();
-      
-      if (data.coins && Array.isArray(data.coins)) {
-        setAllCoins(data.coins);
-      } else if (Array.isArray(data)) {
-        setAllCoins(data);
-      } else {
-        console.error("Invalid data format:", data);
-        setAllCoins([]);
-      }
-    } catch (error) {
-      console.error("Failed to fetch coins:", error);
-      setAllCoins([]);
-    } finally {
-      setLoading(false);
-    }
+  const handleCopyAddress = () => {
+    navigator.clipboard.writeText('Coming Soon');
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
-
-  // Filter and sort coins
-  const filteredCoins = useMemo(() => {
-    if (!Array.isArray(allCoins)) {
-      return [];
-    }
-    let filtered = [...allCoins];
-
-    // Search filter
-    if (filters.search) {
-      const searchLower = filters.search.toLowerCase();
-      filtered = filtered.filter(
-        (coin) =>
-          coin.name.toLowerCase().includes(searchLower) ||
-          coin.symbol.toLowerCase().includes(searchLower) ||
-          coin.mint.toLowerCase().includes(searchLower)
-      );
-    }
-
-    // Tier filter
-    if (filters.tier !== "all") {
-      filtered = filtered.filter((coin) => coin.tier === filters.tier);
-    }
-
-    // Score range filter
-    filtered = filtered.filter((coin) => {
-      const score = coin.trustScore ?? 0;
-      return score >= filters.scoreMin && score <= filters.scoreMax;
-    });
-
-    // Community activity filter
-    if (filters.communityActivity !== "all") {
-      filtered = filtered.filter((coin) => {
-        if (filters.communityActivity === "active") {
-          return coin.pollVotes > 10 || coin.uniqueVoters > 5;
-        } else if (filters.communityActivity === "moderate") {
-          return (coin.pollVotes > 0 || coin.uniqueVoters > 0) && 
-                 !(coin.pollVotes > 10 || coin.uniqueVoters > 5);
-        } else if (filters.communityActivity === "building") {
-          return coin.pollCount > 0 && coin.pollVotes === 0 && coin.uniqueVoters === 0;
-        }
-        return true;
-      });
-    }
-
-    // Sort
-    filtered.sort((a, b) => {
-      switch (filters.sortBy) {
-        case "score":
-          return (b.trustScore ?? 0) - (a.trustScore ?? 0);
-        case "score-asc":
-          return (a.trustScore ?? 0) - (b.trustScore ?? 0);
-        case "name":
-          return a.name.localeCompare(b.name);
-        case "name-desc":
-          return b.name.localeCompare(a.name);
-        case "newest":
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-        case "oldest":
-          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-        case "votes":
-          return b.pollVotes - a.pollVotes;
-        case "polls":
-          return b.pollCount - a.pollCount;
-        default:
-          return 0;
-      }
-    });
-
-    return filtered;
-  }, [allCoins, filters]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-        <Header />
-        <div className="container mx-auto px-4 py-12">
-          <div className="flex justify-center items-center h-64">
-            <div className="text-center">
-              <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-              <div className="text-lg text-gray-600">Loading coins...</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+    <div className="min-h-screen bg-white">
       <Header />
       
-      <div className="container mx-auto px-4 py-8">
-        {/* Hero Section */}
-        <div className="text-center mb-12">
-          <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-4">
-            🪙 Memecoin Communities
-          </h1>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Discover, vote for, and evaluate memecoin communities. See trust scores, community sentiment, and participate in governance.
-          </p>
-        </div>
-
-        {/* Search & Filters */}
-        <SearchAndFilters
-          filters={filters}
-          onFiltersChange={setFilters}
-          totalResults={filteredCoins.length}
+      {/* Hero Section */}
+      <section className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
+        <div 
+          className="absolute inset-0 opacity-5"
+          style={{
+            backgroundImage: `
+              linear-gradient(to right, rgba(255, 255, 255, 0.1) 1px, transparent 1px),
+              linear-gradient(to bottom, rgba(255, 255, 255, 0.1) 1px, transparent 1px)
+            `,
+            backgroundSize: '20px 20px'
+          }}
         />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/50 to-transparent" />
+        
+        <div className="relative container mx-auto px-4 py-24 sm:py-32 lg:py-40">
+          <div className="max-w-4xl mx-auto text-center">
+            {/* Badge */}
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500/10 border border-blue-500/20 mb-8">
+              <Sparkles className="w-4 h-4 text-blue-400" />
+              <span className="text-sm font-medium text-blue-300">AI-Powered Memecoin Intelligence</span>
+            </div>
 
-        {/* Coins Grid */}
-        {filteredCoins.length === 0 ? (
-          <div className="text-center py-16">
-            <div className="bg-white rounded-2xl shadow-lg p-12 max-w-md mx-auto border border-gray-200">
-              <div className="text-6xl mb-4">🔍</div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">No Coins Found</h3>
-              <p className="text-gray-600 mb-4">
-                {filters.search || filters.tier !== "all" || filters.scoreMin > 0 || filters.scoreMax < 100
-                  ? "Try adjusting your filters or search terms"
-                  : "Add your first memecoin to start building a community"}
-              </p>
-              {!filters.search && filters.tier === "all" && filters.scoreMin === 0 && filters.scoreMax === 100 && (
-                <Link
-                  href="/admin"
-                  className="inline-block px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all duration-200 shadow-lg hover:shadow-xl"
-                >
-                  ➕ Add First Coin
-                </Link>
-              )}
+            {/* Main Headline */}
+            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold text-white mb-6 leading-tight">
+              The Future of
+              <span className="block bg-gradient-to-r from-blue-400 via-cyan-400 to-purple-400 bg-clip-text text-transparent">
+                Memecoin Communities
+              </span>
+            </h1>
+
+            {/* Subheadline */}
+            <p className="text-xl sm:text-2xl text-slate-300 mb-8 max-w-2xl mx-auto leading-relaxed">
+              AI-powered analysis, community governance, and transparent funding.
+              <br />
+              <span className="text-blue-400 font-semibold">Built for builders. Trusted by holders.</span>
+            </p>
+
+            {/* CTA Buttons */}
+            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
+              <Link
+                href="/coins"
+                className="group px-8 py-4 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-xl font-semibold text-lg shadow-2xl shadow-blue-500/50 hover:shadow-blue-500/70 transition-all duration-300 hover:scale-105 flex items-center gap-2"
+              >
+                Explore Communities
+                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </Link>
+              <Link
+                href="/admin"
+                className="px-8 py-4 bg-white/10 backdrop-blur-sm border border-white/20 text-white rounded-xl font-semibold text-lg hover:bg-white/20 transition-all duration-300 flex items-center gap-2"
+              >
+                <Zap className="w-5 h-5" />
+                Get Started
+              </Link>
+            </div>
+
+            {/* Stats */}
+            <div className="grid grid-cols-3 gap-8 max-w-2xl mx-auto pt-8 border-t border-white/10">
+              <div>
+                <div className="text-3xl font-bold text-white mb-1">AI</div>
+                <div className="text-sm text-slate-400">Powered Analysis</div>
+              </div>
+              <div>
+                <div className="text-3xl font-bold text-white mb-1">100%</div>
+                <div className="text-sm text-slate-400">Transparent</div>
+              </div>
+              <div>
+                <div className="text-3xl font-bold text-white mb-1">∞</div>
+                <div className="text-sm text-slate-400">Community Driven</div>
+              </div>
             </div>
           </div>
-        ) : (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {filteredCoins.map((coin) => (
-              <div
-                key={coin.id}
-                className="group bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden border border-gray-100 hover:border-blue-300 hover:scale-[1.02]"
-              >
-                {/* Token Header */}
-                <div className={`bg-gradient-to-br ${getTierColor(coin.tier)} p-6 text-white`}>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center text-2xl font-bold shadow-lg relative overflow-hidden">
-                        <img
-                          src={coin.tokenData?.image || `/api/token-image/${coin.mint}`}
-                          alt={`${coin.tokenData?.name || coin.name} logo`}
-                          className="w-full h-full object-cover rounded-full"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.style.display = 'none';
-                          }}
-                        />
-                        <span className="absolute inset-0 flex items-center justify-center text-white font-bold text-xl">
-                          {coin.tokenData?.symbol?.charAt(0) || coin.symbol.charAt(0)}
-                        </span>
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-bold text-white">
-                          {coin.tokenData?.name || coin.name}
-                        </h3>
-                        <p className="text-sm text-white/80 font-mono">
-                          {coin.tokenData?.symbol || coin.symbol}
-                        </p>
-                      </div>
-                    </div>
-                    {coin.trustScore !== null && coin.tier && (
-                      <div className="text-right">
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <span className="text-2xl">{getTierEmoji(coin.tier)}</span>
-                          <span className="text-sm font-bold">{coin.tier}</span>
-                        </div>
-                        <p className="text-2xl font-bold">{coin.trustScore}</p>
-                        <p className="text-xs text-white/80">/100</p>
-                      </div>
-                    )}
-                  </div>
-                  
-                  {coin.tokenData?.price && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-white/80">Price</span>
-                      <div className="text-right">
-                        <span className="font-bold">${coin.tokenData.price.toFixed(6)}</span>
-                        <span className={`ml-2 ${coin.tokenData.priceChange24h >= 0 ? 'text-green-200' : 'text-red-200'}`}>
-                          {coin.tokenData.priceChange24h >= 0 ? '↗' : '↘'} {Math.abs(coin.tokenData.priceChange24h).toFixed(2)}%
-                        </span>
-                      </div>
-                    </div>
-                  )}
+        </div>
+      </section>
+
+      {/* Features Section */}
+      <section className="py-24 bg-white">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-4">
+              Everything You Need to Build
+              <span className="block text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-cyan-600">
+                Trusted Communities
+              </span>
+            </h2>
+            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+              Advanced AI analysis, transparent governance, and community funding all in one platform.
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {/* Feature 1: AI Analysis */}
+            <div className="group p-8 rounded-2xl border border-gray-200 hover:border-blue-300 hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-white to-blue-50/30">
+              <div className="w-14 h-14 bg-gradient-to-br from-blue-600 to-cyan-600 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                <Brain className="w-7 h-7 text-white" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-3">AI-Powered Analysis</h3>
+              <p className="text-gray-600 mb-4 leading-relaxed">
+                Advanced machine learning algorithms analyze trust scores, security, liquidity, and community sentiment in real-time.
+              </p>
+              <ul className="space-y-2 text-sm text-gray-600">
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                  <span>Real-time trust scoring</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                  <span>Security risk detection</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                  <span>Market sentiment analysis</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Feature 2: Community Governance */}
+            <div className="group p-8 rounded-2xl border border-gray-200 hover:border-purple-300 hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-white to-purple-50/30">
+              <div className="w-14 h-14 bg-gradient-to-br from-purple-600 to-pink-600 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                <Vote className="w-7 h-7 text-white" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-3">Token-Gated Governance</h3>
+              <p className="text-gray-600 mb-4 leading-relaxed">
+                Only token holders can create polls and vote. True decentralized governance for your community.
+              </p>
+              <ul className="space-y-2 text-sm text-gray-600">
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                  <span>Holder-only voting</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                  <span>Transparent results</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                  <span>Real-time participation</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Feature 3: Founding Wallets */}
+            <div className="group p-8 rounded-2xl border border-gray-200 hover:border-cyan-300 hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-white to-cyan-50/30">
+              <div className="w-14 h-14 bg-gradient-to-br from-cyan-600 to-blue-600 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                <Wallet className="w-7 h-7 text-white" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-3">Founding Wallets</h3>
+              <p className="text-gray-600 mb-4 leading-relaxed">
+                Transparent funding for builders. Track contributions, monitor progress, and build reputation.
+              </p>
+              <ul className="space-y-2 text-sm text-gray-600">
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                  <span>Real-time tracking</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                  <span>Builder reputation system</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                  <span>Community ratings</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Feature 4: Trust Scores */}
+            <div className="group p-8 rounded-2xl border border-gray-200 hover:border-green-300 hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-white to-green-50/30">
+              <div className="w-14 h-14 bg-gradient-to-br from-green-600 to-emerald-600 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                <Shield className="w-7 h-7 text-white" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-3">Trust Scores</h3>
+              <p className="text-gray-600 mb-4 leading-relaxed">
+                Comprehensive scoring system evaluating security, liquidity, maturity, and community health.
+              </p>
+              <ul className="space-y-2 text-sm text-gray-600">
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                  <span>Multi-factor analysis</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                  <span>Real-time updates</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                  <span>Transparent methodology</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Feature 5: Analytics */}
+            <div className="group p-8 rounded-2xl border border-gray-200 hover:border-orange-300 hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-white to-orange-50/30">
+              <div className="w-14 h-14 bg-gradient-to-br from-orange-600 to-red-600 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                <BarChart3 className="w-7 h-7 text-white" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-3">Advanced Analytics</h3>
+              <p className="text-gray-600 mb-4 leading-relaxed">
+                Deep insights into community activity, voting patterns, and engagement metrics.
+              </p>
+              <ul className="space-y-2 text-sm text-gray-600">
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                  <span>Community metrics</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                  <span>Voting analytics</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                  <span>Trend analysis</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Feature 6: Community Building */}
+            <div className="group p-8 rounded-2xl border border-gray-200 hover:border-indigo-300 hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-white to-indigo-50/30">
+              <div className="w-14 h-14 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                <Users className="w-7 h-7 text-white" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-3">Community Building</h3>
+              <p className="text-gray-600 mb-4 leading-relaxed">
+                Tools to engage your community, build trust, and grow your memecoin ecosystem.
+              </p>
+              <ul className="space-y-2 text-sm text-gray-600">
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                  <span>Engagement tools</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                  <span>Social features</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* How It Works Section */}
+      <section className="py-24 bg-gradient-to-br from-slate-50 to-blue-50">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-4">
+              How It Works
+            </h2>
+            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+              Three simple steps to build a trusted, engaged community.
+            </p>
+          </div>
+
+          <div className="max-w-5xl mx-auto">
+            <div className="grid md:grid-cols-3 gap-8">
+              {/* Step 1 */}
+              <div className="relative">
+                <div className="absolute -top-4 -left-4 w-12 h-12 bg-gradient-to-br from-blue-600 to-cyan-600 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg">
+                  1
                 </div>
-
-                {/* Analysis Section */}
-                <div className="p-6 border-b border-gray-200 bg-gradient-to-br from-blue-50/50 to-purple-50/50">
-                  <h4 className="text-sm font-semibold text-gray-700 mb-4 flex items-center">
-                    <span className="mr-2">📊</span>
-                    Analysis
-                  </h4>
-                  {coin.trustScore === null ? (
-                    <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
-                      <p className="text-xs text-gray-500 italic text-center">No analysis available yet</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between p-3 bg-white rounded-xl shadow-sm border border-gray-200">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xl">👍</span>
-                          <span className="text-lg font-bold text-green-600">{coin.coinUpvotes}</span>
-                        </div>
-                        <div className="w-px h-6 bg-gray-300"></div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xl">👎</span>
-                          <span className="text-lg font-bold text-red-600">{coin.coinDownvotes}</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Community Section */}
-                <div className="p-6">
-                  <h4 className="text-sm font-semibold text-gray-700 mb-4 flex items-center">
-                    <span className="mr-2">👥</span>
-                    Community Activity
-                  </h4>
-                  <div className="grid grid-cols-3 gap-3 mb-4">
-                    <div className="text-center p-3 bg-blue-50 rounded-xl border border-blue-100">
-                      <p className="text-2xl font-bold text-blue-600">{coin.pollCount}</p>
-                      <p className="text-xs text-gray-600 font-medium mt-1">Polls</p>
-                    </div>
-                    <div className="text-center p-3 bg-green-50 rounded-xl border border-green-100">
-                      <p className="text-2xl font-bold text-green-600">{coin.pollVotes}</p>
-                      <p className="text-xs text-gray-600 font-medium mt-1">Votes</p>
-                    </div>
-                    <div className="text-center p-3 bg-purple-50 rounded-xl border border-purple-100">
-                      <p className="text-2xl font-bold text-purple-600">{coin.uniqueVoters}</p>
-                      <p className="text-xs text-gray-600 font-medium mt-1">Voters</p>
-                    </div>
+                <div className="p-8 bg-white rounded-2xl border border-gray-200 shadow-lg h-full">
+                  <div className="w-16 h-16 bg-gradient-to-br from-blue-100 to-cyan-100 rounded-xl flex items-center justify-center mb-6">
+                    <TrendingUp className="w-8 h-8 text-blue-600" />
                   </div>
-
-                  {/* Activity Indicator */}
-                  <div className="mb-4">
-                    {coin.pollVotes > 0 || coin.uniqueVoters > 0 ? (
-                      <div className="flex items-center gap-2 p-2 bg-green-50 rounded-lg border border-green-200">
-                        <span className="text-green-600">🟢</span>
-                        <p className="text-xs text-green-700 font-medium">
-                          {coin.pollVotes > 10 || coin.uniqueVoters > 5 
-                            ? "Very active community" 
-                            : "Active community"}
-                        </p>
-                      </div>
-                    ) : coin.pollCount > 0 ? (
-                      <div className="flex items-center gap-2 p-2 bg-yellow-50 rounded-lg border border-yellow-200">
-                        <span className="text-yellow-600">🟡</span>
-                        <p className="text-xs text-yellow-700 font-medium">Community building</p>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg border border-gray-200">
-                        <span className="text-gray-400">⚪</span>
-                        <p className="text-xs text-gray-600 font-medium">No activity yet</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Action Button */}
-                  <Link
-                    href={`/coin/${coin.mint}`}
-                    className="w-full px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all duration-200 text-center block font-semibold shadow-lg hover:shadow-xl"
-                  >
-                    View Coin & Vote →
-                  </Link>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-4">Add Your Coin</h3>
+                  <p className="text-gray-600 leading-relaxed">
+                    Create your community page and get instant AI-powered analysis. Free for everyone, no restrictions.
+                  </p>
                 </div>
               </div>
-            ))}
+
+              {/* Step 2 */}
+              <div className="relative">
+                <div className="absolute -top-4 -left-4 w-12 h-12 bg-gradient-to-br from-purple-600 to-pink-600 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg">
+                  2
+                </div>
+                <div className="p-8 bg-white rounded-2xl border border-gray-200 shadow-lg h-full">
+                  <div className="w-16 h-16 bg-gradient-to-br from-purple-100 to-pink-100 rounded-xl flex items-center justify-center mb-6">
+                    <Users className="w-8 h-8 text-purple-600" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-4">Engage Your Community</h3>
+                  <p className="text-gray-600 leading-relaxed">
+                    Create polls, let holders vote, and build governance. Only token holders can participate.
+                  </p>
+                </div>
+              </div>
+
+              {/* Step 3 */}
+              <div className="relative">
+                <div className="absolute -top-4 -left-4 w-12 h-12 bg-gradient-to-br from-cyan-600 to-blue-600 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg">
+                  3
+                </div>
+                <div className="p-8 bg-white rounded-2xl border border-gray-200 shadow-lg h-full">
+                  <div className="w-16 h-16 bg-gradient-to-br from-cyan-100 to-blue-100 rounded-xl flex items-center justify-center mb-6">
+                    <Wallet className="w-8 h-8 text-cyan-600" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-4">Fund & Build</h3>
+                  <p className="text-gray-600 leading-relaxed">
+                    Create founding wallets for projects. Builders get funded, holders rate builders, wallets build reputation.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      </section>
+
+      {/* Integrate Everywhere Section */}
+      <section className="py-24 bg-white">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-4">
+              Use on Your Site
+              <span className="block text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-cyan-600">
+                Works Everywhere
+              </span>
+            </h2>
+            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+              Integrate your community widget on any website. Give your holders a voice, no matter where they are.
+            </p>
+          </div>
+
+          <div className="max-w-6xl mx-auto">
+            {/* Platform Grid */}
+            <div className="grid md:grid-cols-3 gap-6 mb-12">
+              {/* WordPress */}
+              <div className="p-6 bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl border border-blue-200 hover:shadow-xl transition-all">
+                <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center mb-4">
+                  <Globe className="w-6 h-6 text-white" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">WordPress</h3>
+                <p className="text-gray-600 text-sm mb-4">
+                  Add a "Custom HTML" block, paste the code, done.
+                </p>
+                <div className="flex items-center gap-2 text-sm text-blue-600 font-medium">
+                  <Code className="w-4 h-4" />
+                  <span>Copy & Paste</span>
+                </div>
+              </div>
+
+              {/* Wix */}
+              <div className="p-6 bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl border border-purple-200 hover:shadow-xl transition-all">
+                <div className="w-12 h-12 bg-purple-600 rounded-xl flex items-center justify-center mb-4">
+                  <Globe className="w-6 h-6 text-white" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">Wix</h3>
+                <p className="text-gray-600 text-sm mb-4">
+                  Add "HTML Code" element, paste the code, done.
+                </p>
+                <div className="flex items-center gap-2 text-sm text-purple-600 font-medium">
+                  <Code className="w-4 h-4" />
+                  <span>Copy & Paste</span>
+                </div>
+              </div>
+
+              {/* Any HTML Site */}
+              <div className="p-6 bg-gradient-to-br from-cyan-50 to-blue-50 rounded-2xl border border-cyan-200 hover:shadow-xl transition-all">
+                <div className="w-12 h-12 bg-cyan-600 rounded-xl flex items-center justify-center mb-4">
+                  <Code className="w-6 h-6 text-white" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">Any HTML Site</h3>
+                <p className="text-gray-600 text-sm mb-4">
+                  Works on any website. Just paste the iframe code.
+                </p>
+                <div className="flex items-center gap-2 text-sm text-cyan-600 font-medium">
+                  <Code className="w-4 h-4" />
+                  <span>Universal</span>
+                </div>
+              </div>
+            </div>
+
+            {/* How It Works */}
+            <div className="bg-gradient-to-br from-slate-50 to-blue-50 rounded-2xl p-8 border border-gray-200">
+              <h3 className="text-2xl font-bold text-gray-900 mb-6 text-center">
+                How to Integrate
+              </h3>
+              <div className="grid md:grid-cols-3 gap-6">
+                <div className="text-center">
+                  <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-cyan-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <span className="text-2xl font-bold text-white">1</span>
+                  </div>
+                  <h4 className="font-semibold text-gray-900 mb-2">Get Your Embed Code</h4>
+                  <p className="text-sm text-gray-600">
+                    Go to your coin page and click "Embed Widget" to get your unique code.
+                  </p>
+                </div>
+                <div className="text-center">
+                  <div className="w-16 h-16 bg-gradient-to-br from-purple-600 to-pink-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <span className="text-2xl font-bold text-white">2</span>
+                  </div>
+                  <h4 className="font-semibold text-gray-900 mb-2">Copy the Code</h4>
+                  <p className="text-sm text-gray-600">
+                    Copy the iframe code with one click. No technical knowledge needed.
+                  </p>
+                </div>
+                <div className="text-center">
+                  <div className="w-16 h-16 bg-gradient-to-br from-cyan-600 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <span className="text-2xl font-bold text-white">3</span>
+                  </div>
+                  <h4 className="font-semibold text-gray-900 mb-2">Paste & Done</h4>
+                  <p className="text-sm text-gray-600">
+                    Paste into your website. Your holders can now vote and engage directly.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* CTA */}
+            <div className="mt-12 text-center">
+              <p className="text-lg text-gray-700 mb-6">
+                <span className="font-semibold text-gray-900">Give your holders a voice.</span> Integrate community governance on your website.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <Link
+                  href="/coins"
+                  className="px-8 py-4 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 flex items-center justify-center gap-2"
+                >
+                  <Copy className="w-5 h-5" />
+                  Get Embed Code
+                </Link>
+                <Link
+                  href="/admin"
+                  className="px-8 py-4 bg-white border-2 border-gray-300 text-gray-700 rounded-xl font-semibold text-lg hover:bg-gray-50 transition-all duration-300 flex items-center justify-center gap-2"
+                >
+                  <Globe className="w-5 h-5" />
+                  View Examples
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Memocracy Coin Section */}
+      <section className="py-24 bg-gradient-to-br from-blue-600 via-cyan-600 to-purple-600 relative overflow-hidden">
+        <div 
+          className="absolute inset-0 opacity-5"
+          style={{
+            backgroundImage: `
+              linear-gradient(to right, rgba(255, 255, 255, 0.1) 1px, transparent 1px),
+              linear-gradient(to bottom, rgba(255, 255, 255, 0.1) 1px, transparent 1px)
+            `,
+            backgroundSize: '20px 20px'
+          }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-blue-600/50 via-transparent to-transparent" />
+        
+        <div className="relative container mx-auto px-4">
+          <div className="max-w-5xl mx-auto">
+            {/* Badge */}
+            <div className="text-center mb-8">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/20 backdrop-blur-sm border border-white/30 mb-6">
+                <Sparkles className="w-4 h-4 text-white" />
+                <span className="text-sm font-medium text-white">Official Token</span>
+              </div>
+              <h2 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-4">
+                Memocracy Coin
+              </h2>
+              <p className="text-xl sm:text-2xl text-white/90 max-w-2xl mx-auto">
+                The governance token powering the future of memecoin communities
+              </p>
+            </div>
+
+            {/* Coin Card */}
+            <div className="bg-white/10 backdrop-blur-lg rounded-3xl border border-white/20 shadow-2xl p-8 sm:p-12">
+              <div className="grid md:grid-cols-2 gap-8 items-center">
+                {/* Left: Coin Info */}
+                <div>
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="w-20 h-20 bg-gradient-to-br from-white to-blue-100 rounded-2xl flex items-center justify-center shadow-lg">
+                      <Brain className="w-10 h-10 text-blue-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-3xl font-bold text-white mb-1">MEMOCRACY</h3>
+                      <p className="text-white/80 text-lg">MEMO</p>
+                    </div>
+                  </div>
+
+                  <p className="text-white/90 mb-6 leading-relaxed">
+                    Memocracy Coin holders govern the platform's development. Vote on features, 
+                    fund projects, and shape the future of memecoin communities.
+                  </p>
+
+                  {/* Contract Address */}
+                  <div className="mb-6">
+                    <label className="block text-sm font-semibold text-white/90 mb-2">
+                      Contract Address
+                    </label>
+                    <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
+                      <code className="flex-1 text-white font-mono text-sm break-all">
+                        Coming Soon
+                      </code>
+                      <button
+                        onClick={handleCopyAddress}
+                        className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                        title="Copy address"
+                      >
+                        {copied ? (
+                          <Check className="w-4 h-4 text-green-400" />
+                        ) : (
+                          <CopyIcon className="w-4 h-4 text-white" />
+                        )}
+                      </button>
+                    </div>
+                    <p className="text-xs text-white/70 mt-2">
+                      Contract address will be available at launch
+                    </p>
+                  </div>
+
+                  {/* Social Links */}
+                  <div className="flex flex-wrap gap-4">
+                    <a
+                      href="https://t.me/memocracycoin"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 px-6 py-3 bg-white/20 hover:bg-white/30 backdrop-blur-sm border border-white/30 rounded-xl text-white font-semibold transition-all duration-300 hover:scale-105"
+                    >
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+                      </svg>
+                      <span>Telegram</span>
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                    <a
+                      href="https://x.com/memocracycoin"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 px-6 py-3 bg-white/20 hover:bg-white/30 backdrop-blur-sm border border-white/30 rounded-xl text-white font-semibold transition-all duration-300 hover:scale-105"
+                    >
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                      </svg>
+                      <span>X (Twitter)</span>
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                  </div>
+                </div>
+
+                {/* Right: Features */}
+                <div className="space-y-4">
+                  <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
+                    <h4 className="text-white font-bold text-lg mb-3 flex items-center gap-2">
+                      <Vote className="w-5 h-5" />
+                      Governance Rights
+                    </h4>
+                    <p className="text-white/90 text-sm">
+                      Vote on platform features, roadmap decisions, and community proposals. Your voice matters.
+                    </p>
+                  </div>
+
+                  <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
+                    <h4 className="text-white font-bold text-lg mb-3 flex items-center gap-2">
+                      <Wallet className="w-5 h-5" />
+                      Founding Wallet Access
+                    </h4>
+                    <p className="text-white/90 text-sm">
+                      Create and fund projects through founding wallets. Builders get funded, holders rate builders.
+                    </p>
+                  </div>
+
+                  <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
+                    <h4 className="text-white font-bold text-lg mb-3 flex items-center gap-2">
+                      <Shield className="w-5 h-5" />
+                      Platform Benefits
+                    </h4>
+                    <p className="text-white/90 text-sm">
+                      Exclusive access to premium features, early access to new tools, and priority support.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* CTA */}
+              <div className="mt-8 pt-8 border-t border-white/20 text-center">
+                <p className="text-white/90 mb-4 text-lg">
+                  Join the Memocracy community and help shape the future of memecoin governance
+                </p>
+                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                  <a
+                    href="https://t.me/memocracycoin"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-8 py-4 bg-white text-blue-600 rounded-xl font-bold text-lg shadow-2xl hover:shadow-white/50 transition-all duration-300 hover:scale-105 flex items-center justify-center gap-2"
+                  >
+                    Join Telegram
+                    <ExternalLink className="w-5 h-5" />
+                  </a>
+                  <a
+                    href="https://x.com/memocracycoin"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-8 py-4 bg-white/10 backdrop-blur-sm border-2 border-white text-white rounded-xl font-bold text-lg hover:bg-white/20 transition-all duration-300 flex items-center justify-center gap-2"
+                  >
+                    Follow on X
+                    <ExternalLink className="w-5 h-5" />
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="py-24 bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
+        <div className="container mx-auto px-4">
+          <div className="max-w-4xl mx-auto text-center">
+            <h2 className="text-4xl sm:text-5xl font-bold text-white mb-6">
+              Ready to Build Your Community?
+            </h2>
+            <p className="text-xl text-slate-300 mb-8 max-w-2xl mx-auto">
+              Join the future of memecoin communities. AI-powered, transparent, and community-driven.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Link
+                href="/coins"
+                className="px-8 py-4 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-xl font-semibold text-lg shadow-2xl shadow-blue-500/50 hover:shadow-blue-500/70 transition-all duration-300 hover:scale-105"
+              >
+                Explore Communities
+              </Link>
+              <Link
+                href="/admin"
+                className="px-8 py-4 bg-white/10 backdrop-blur-sm border border-white/20 text-white rounded-xl font-semibold text-lg hover:bg-white/20 transition-all duration-300"
+              >
+                Get Started Free
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-gray-900 text-gray-300 py-12">
+        <div className="container mx-auto px-4">
+          <div className="grid md:grid-cols-4 gap-8 mb-8">
+            <div>
+              <h3 className="text-white font-bold text-lg mb-4">Memocracy</h3>
+              <p className="text-sm text-gray-400">
+                AI-powered platform for memecoin communities. Built for builders, trusted by holders.
+              </p>
+            </div>
+            <div>
+              <h4 className="text-white font-semibold mb-4">Platform</h4>
+              <ul className="space-y-2 text-sm">
+                <li><Link href="/coins" className="hover:text-white transition-colors">Communities</Link></li>
+                <li><Link href="/admin" className="hover:text-white transition-colors">Get Started</Link></li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="text-white font-semibold mb-4">Features</h4>
+              <ul className="space-y-2 text-sm">
+                <li><span className="text-gray-400">AI Analysis</span></li>
+                <li><span className="text-gray-400">Community Governance</span></li>
+                <li><span className="text-gray-400">Founding Wallets</span></li>
+                <li><span className="text-gray-400">Trust Scores</span></li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="text-white font-semibold mb-4">Memocracy Coin</h4>
+              <ul className="space-y-2 text-sm">
+                <li><span className="text-gray-400">Contract: Coming Soon</span></li>
+                <li><span className="text-gray-400">Email: coin@memocracy.io</span></li>
+                <li><span className="text-gray-400">Telegram: @memocracycoin</span></li>
+              </ul>
+            </div>
+          </div>
+          <div className="border-t border-gray-800 pt-8 text-center text-sm text-gray-400">
+            <p>&copy; 2025 Memocracy. All rights reserved.</p>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

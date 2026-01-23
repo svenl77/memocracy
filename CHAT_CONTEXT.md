@@ -70,7 +70,6 @@ communitySentiment: 0.15 (15%)
 - `FoundingWalletComment` - Comments and ratings
 - `FoundingWalletTrustScore` - Trust scores for founding wallets
 - `TokenMetadata` - Cached token data from DexScreener
-- `LeaderboardEntry` - Leaderboard entries (from remote)
 
 ---
 

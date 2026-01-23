@@ -391,6 +391,12 @@ function AdminContent() {
               >
                 Manage Project Wallets
               </Link>
+              <Link
+                href="/admin/bags-coin"
+                className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-colors flex items-center gap-2"
+              >
+                🚀 Create Bags Coin
+              </Link>
             </div>
           </div>
 
@@ -1107,7 +1113,7 @@ function AdminContent() {
                 💰 Create Founding Wallet
               </h1>
               <p className="text-gray-600 mb-6">
-                Create a founding wallet to enable community funding for specific projects. Contributors can send funds directly to the wallet address, and the community can vote on proposals for how to use the funds.
+                Create a founding wallet to enable community funding for specific projects. Contributors can send funds directly to the wallet address, and all transactions are tracked transparently.
               </p>
             </div>
 
@@ -1471,11 +1477,11 @@ function AdminContent() {
                 </li>
                 <li className="flex items-start space-x-2">
                   <span className="text-purple-600">•</span>
-                  <span>Contributors can create proposals and vote on fund usage</span>
+                  <span>All transactions are tracked and displayed transparently</span>
                 </li>
                 <li className="flex items-start space-x-2">
                   <span className="text-purple-600">•</span>
-                  <span>Contributors can leave comments and ratings</span>
+                  <span>Contributors can see their contribution history</span>
                 </li>
                 <li className="flex items-start space-x-2">
                   <span className="text-purple-600">•</span>

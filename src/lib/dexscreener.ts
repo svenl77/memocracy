@@ -68,6 +68,8 @@ function getTokenImageUrl(tokenAddress: string, symbol?: string): string {
 
 // Cache duration: 5 minutes for price data (volatile)
 const CACHE_DURATION_MS = 5 * 60 * 1000;
+// Cache duration for social links: 24 hours (less volatile)
+const SOCIAL_LINKS_CACHE_DURATION_MS = 24 * 60 * 60 * 1000;
 
 export async function getTokenData(tokenAddress: string, useCache: boolean = true): Promise<{
   name: string;
@@ -152,7 +154,7 @@ export async function getTokenData(tokenAddress: string, useCache: boolean = tru
       volume24h: bestPair.volume.h24 || 0,
       marketCap: bestPair.marketCap,
       liquidity: bestPair.liquidity?.usd,
-      image: bestPair.baseToken.image || getTokenImageUrl(bestPair.baseToken.address, bestPair.baseToken.symbol),
+      image: (bestPair.baseToken as any).image || getTokenImageUrl(bestPair.baseToken.address, bestPair.baseToken.symbol),
       txns: bestPair.txns,
       pairCreatedAt: bestPair.pairCreatedAt,
     };
@@ -221,4 +223,152 @@ export async function getTokenData(tokenAddress: string, useCache: boolean = tru
     
     return null;
   }
+}
+
+// Function to get social links for a token
+export async function getTokenSocialLinks(
+  tokenAddress: string,
+  useCache: boolean = true
+): Promise<{
+  website?: string;
+  twitter?: string;
+  telegram?: string;
+  discord?: string;
+  github?: string;
+} | null> {
+  // Try to get from cache first
+  if (useCache) {
+    try {
+      const { prisma } = await import("@/lib/db");
+      const cached = await prisma.tokenMetadata.findUnique({
+        where: { mint: tokenAddress },
+        select: {
+          website: true,
+          twitter: true,
+          telegram: true,
+          discord: true,
+          github: true,
+          lastUpdated: true,
+        },
+      });
+
+      if (cached && cached.lastUpdated) {
+        const cacheAge = Date.now() - new Date(cached.lastUpdated).getTime();
+        // If we have at least one social link and cache is fresh, return it
+        if (
+          cacheAge < SOCIAL_LINKS_CACHE_DURATION_MS &&
+          (cached.website || cached.twitter || cached.telegram || cached.discord || cached.github)
+        ) {
+          return {
+            website: cached.website || undefined,
+            twitter: cached.twitter || undefined,
+            telegram: cached.telegram || undefined,
+            discord: cached.discord || undefined,
+            github: cached.github || undefined,
+          };
+        }
+      }
+    } catch (error) {
+      // Silently continue to fetch from API if cache read fails
+    }
+  }
+
+  // Try CoinGecko first (better social links data)
+  try {
+    const coingeckoResponse = await fetch(
+      `https://api.coingecko.com/api/v3/coins/solana/contract/${tokenAddress}`,
+      {
+        signal: AbortSignal.timeout(5000),
+        headers: {
+          'Accept': 'application/json',
+        },
+      }
+    );
+
+    if (coingeckoResponse.ok) {
+      const data = await coingeckoResponse.json();
+      const links = data.links || {};
+
+      const socialLinks = {
+        website: links.homepage?.[0] || undefined,
+        twitter: links.twitter_screen_name
+          ? `https://twitter.com/${links.twitter_screen_name}`
+          : links.twitter_url?.[0] || undefined,
+        telegram: links.telegram_channel_identifier
+          ? `https://t.me/${links.telegram_channel_identifier}`
+          : links.telegram_url?.[0] || undefined,
+        discord: links.chat_url?.find((url: string) => url.includes('discord')) || undefined,
+        github: links.repos_url?.github?.[0] || undefined,
+      };
+
+      // Save to cache (async, don't wait)
+      if (useCache && (socialLinks.website || socialLinks.twitter || socialLinks.telegram || socialLinks.discord || socialLinks.github)) {
+        try {
+          const { prisma } = await import("@/lib/db");
+          await prisma.tokenMetadata.upsert({
+            where: { mint: tokenAddress },
+            update: {
+              website: socialLinks.website || null,
+              twitter: socialLinks.twitter || null,
+              telegram: socialLinks.telegram || null,
+              discord: socialLinks.discord || null,
+              github: socialLinks.github || null,
+              lastUpdated: new Date(),
+            },
+            create: {
+              mint: tokenAddress,
+              website: socialLinks.website || null,
+              twitter: socialLinks.twitter || null,
+              telegram: socialLinks.telegram || null,
+              discord: socialLinks.discord || null,
+              github: socialLinks.github || null,
+            },
+          });
+        } catch (error) {
+          // Silently continue if caching fails (non-critical)
+        }
+      }
+
+      // Return if we have at least one link
+      if (socialLinks.website || socialLinks.twitter || socialLinks.telegram || socialLinks.discord || socialLinks.github) {
+        return socialLinks;
+      }
+    }
+  } catch (error) {
+    // CoinGecko might not have the token, continue to other sources
+  }
+
+  // Fallback: Try to get from DexScreener (limited social link data)
+  // Note: DexScreener doesn't directly provide social links, but we can check if they add them in the future
+  // For now, return null if CoinGecko doesn't have it
+
+  // Return stale cache if available
+  if (useCache) {
+    try {
+      const { prisma } = await import("@/lib/db");
+      const cached = await prisma.tokenMetadata.findUnique({
+        where: { mint: tokenAddress },
+        select: {
+          website: true,
+          twitter: true,
+          telegram: true,
+          discord: true,
+          github: true,
+        },
+      });
+      if (cached && (cached.website || cached.twitter || cached.telegram || cached.discord || cached.github)) {
+        return {
+          website: cached.website || undefined,
+          twitter: cached.twitter || undefined,
+          telegram: cached.telegram || undefined,
+          discord: cached.discord || undefined,
+          github: cached.github || undefined,
+        };
+      }
+    } catch (cacheError) {
+      // Ignore cache errors
+    }
+  }
+
+  return null;
 }

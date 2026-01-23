@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Format the response
-    const formattedWallets = projectWallets.map(wallet => ({
+    const formattedWallets = projectWallets.map((wallet: typeof projectWallets[0]) => ({
       id: wallet.id,
       address: wallet.address,
       label: wallet.label,
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
       createdAt: wallet.createdAt,
       pollCount: wallet.polls.length,
       latestPoll: wallet.polls.length > 0 ? 
-        wallet.polls.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0].createdAt : 
+        wallet.polls.sort((a: typeof wallet.polls[0], b: typeof wallet.polls[0]) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0].createdAt : 
         null,
     }));
 

@@ -100,8 +100,8 @@ async function analyzeTransactionForTransfers(
       
       // Handle SOL transfers
       if (mint === 'SOL' || mint === 'ANY') {
-        if (parsed.type === 'transfer' && parsed.program === 'system') {
-          const info = parsed.info;
+        if ((parsed as any).type === 'transfer' && (parsed as any).program === 'system') {
+          const info = (parsed as any).info;
           if (info.source === fromWallet.toString() && info.destination === toWallet.toString()) {
             totalLamports += BigInt(info.lamports);
           }
@@ -110,8 +110,8 @@ async function analyzeTransactionForTransfers(
 
       // Handle SPL token transfers
       if (mint === 'USDC' || mint === 'ANY') {
-        if (parsed.type === 'transfer' && parsed.program === 'spl-token') {
-          const info = parsed.info;
+        if ((parsed as any).type === 'transfer' && (parsed as any).program === 'spl-token') {
+          const info = (parsed as any).info;
           
           // For USDC, we'd need to check the mint address
           // For now, we'll include all SPL token transfers

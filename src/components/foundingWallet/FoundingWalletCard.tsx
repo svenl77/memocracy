@@ -13,7 +13,7 @@ interface FoundingWallet {
   status: string;
   contributorCount: number;
   transactionCount: number;
-  coin: {
+  coin?: {
     id: string;
     mint: string;
     symbol: string;

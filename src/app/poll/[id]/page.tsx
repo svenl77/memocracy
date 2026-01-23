@@ -385,16 +385,17 @@ function PollContent() {
                         </button>
                       </div>
                       
-                      {poll?.projectWallet && poll?.minContributionUSD && (
+                      {poll?.projectWallet && poll?.minContributionLamports && (
                         <div className="flex items-center justify-between">
                           <div>
                             <p className="text-sm text-blue-700 font-medium">Make a donation</p>
                             <p className="text-xs text-blue-600">
-                              Contribute ${poll.minContributionUSD} USD to {poll.projectWallet.label}
+                              Contribute {(parseInt(poll.minContributionLamports) / 1000000000).toFixed(2)} SOL to {poll.projectWallet.label}
                             </p>
                           </div>
                           <button
                             onClick={async () => {
+                              if (!poll.projectWallet) return;
                               try {
                                 // Copy wallet address to clipboard
                                 await navigator.clipboard.writeText(poll.projectWallet.address);
@@ -427,6 +428,7 @@ function PollContent() {
                           </div>
                           <button
                             onClick={() => {
+                              if (!poll.coin) return;
                               // Open DEX or token info
                               const dexUrl = `https://dexscreener.com/solana/${poll.coin.mint}`;
                               window.open(dexUrl, '_blank');

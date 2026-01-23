@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getWalletTransactionsFromBlockchain } from "@/lib/solanaWalletMonitor";
 import { rateLimitMiddleware, rateLimitPresets } from "@/lib/rateLimit";
 import { logger } from "@/lib/logger";
 import { safeErrorResponse } from "@/lib/apiHelpers";
@@ -15,14 +16,13 @@ export async function GET(
 
   try {
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get("page") || "1");
     const limit = Math.min(parseInt(searchParams.get("limit") || "50"), 100);
-    const skip = (page - 1) * limit;
+    const forceRefresh = searchParams.get("refresh") === "true";
 
     // Verify wallet exists and is a founding wallet
     const wallet = await prisma.projectWallet.findUnique({
       where: { id: params.id },
-      select: { id: true, type: true },
+      select: { id: true, type: true, address: true },
     });
 
     if (!wallet || wallet.type !== "FOUNDING") {
@@ -32,28 +32,36 @@ export async function GET(
       );
     }
 
-    const [transactions, total] = await Promise.all([
-      prisma.foundingWalletTransaction.findMany({
-        where: { foundingWalletId: params.id },
-        orderBy: {
-          createdAt: "desc",
-        },
-        skip,
-        take: limit,
-      }),
-      prisma.foundingWalletTransaction.count({
-        where: { foundingWalletId: params.id },
-      }),
-    ]);
+    // Get transactions from database (includes memo fields)
+    const dbTransactions = await prisma.foundingWalletTransaction.findMany({
+      where: { foundingWalletId: params.id },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      select: {
+        id: true,
+        signature: true,
+        fromWallet: true,
+        toWallet: true,
+        amountLamports: true,
+        amountUSD: true,
+        tokenMint: true,
+        transactionType: true,
+        blockTime: true,
+        slot: true,
+        memo: true,
+        projectIdFromMemo: true,
+        createdAt: true,
+      },
+    });
 
     return NextResponse.json({
-      transactions,
+      transactions: dbTransactions,
       pagination: {
-        page,
+        page: 1,
         limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-        hasMore: skip + limit < total,
+        total: dbTransactions.length,
+        totalPages: 1,
+        hasMore: dbTransactions.length === limit,
       },
     });
   } catch (error) {

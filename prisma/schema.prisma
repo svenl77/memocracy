@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
@@ -18,6 +18,9 @@ model Coin {
   wallets    ProjectWallet[]
   trustScore TrustScore?
   votes      CoinVote[]
+
+  // Bags Coin relation (optional - only for Bags-powered coins)
+  bagsCoin BagsCoin?
 }
 
 model ProjectWallet {
@@ -54,26 +57,28 @@ model ProjectWallet {
 }
 
 model Poll {
-  id                      String         @id @default(cuid())
+  id                      String              @id @default(cuid())
   topic                   String
   options                 String
-  pollType                String         @default("YES_NO") // YES_NO or MULTIPLE_CHOICE
-  allowMultiple           Boolean        @default(false)
+  pollType                String              @default("YES_NO") // YES_NO or MULTIPLE_CHOICE
+  allowMultiple           Boolean             @default(false)
   maxSelections           Int? // null means no limit
   startAt                 DateTime
   endAt                   DateTime
   tokenCA                 String?
-  accessMode              String         @default("COIN")
+  accessMode              String              @default("COIN")
   coinId                  String?
   coinMinHold             String?
   projectWalletId         String?
   minContributionLamports String?
   minContributionUSD      String?
   contributionMint        String?
-  createdAt               DateTime       @default(now())
-  projectWallet           ProjectWallet? @relation(fields: [projectWalletId], references: [id])
-  coin                    Coin?          @relation(fields: [coinId], references: [id])
+  createdAt               DateTime            @default(now())
+  projectWallet           ProjectWallet?      @relation(fields: [projectWalletId], references: [id])
+  coin                    Coin?               @relation(fields: [coinId], references: [id])
   votes                   Vote[]
+  BagsFoundingWallet      BagsFoundingWallet? @relation(fields: [bagsFoundingWalletId], references: [id])
+  bagsFoundingWalletId    String?
 }
 
 model Vote {
@@ -95,19 +100,6 @@ model Nonce {
   value      String    @unique
   createdAt  DateTime  @default(now())
   consumedAt DateTime?
-}
-
-model LeaderboardEntry {
-  id        String   @id @default(cuid())
-  wallet    String   @unique
-  username  String
-  score     Int
-  signature String
-  nonce     String
-  message   String
-  signedAt  DateTime
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 }
 
 model TrustScore {
@@ -156,8 +148,15 @@ model CoinVote {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // On-chain fields
+  transactionSignature String? // Solana transaction signature
+  onChainSynced        Boolean   @default(false)
+  syncedAt             DateTime?
+
   @@unique([coinId, wallet])
   @@index([coinId])
+  @@index([transactionSignature])
+  @@index([onChainSynced])
 }
 
 model TokenMetadata {
@@ -171,6 +170,11 @@ model TokenMetadata {
   marketCap      Float?
   liquidity      Float?
   image          String?
+  website        String?
+  twitter        String?
+  telegram       String?
+  discord        String?
+  github         String?
   lastUpdated    DateTime @default(now())
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -180,23 +184,26 @@ model TokenMetadata {
 }
 
 model FoundingWalletTransaction {
-  id               String        @id @default(cuid())
-  foundingWalletId String
-  foundingWallet   ProjectWallet @relation(fields: [foundingWalletId], references: [id], onDelete: Cascade)
-  signature        String        @unique
-  fromWallet       String
-  toWallet         String
-  amountLamports   String
-  amountUSD        Float?
-  tokenMint        String?
-  transactionType  String // DEPOSIT, WITHDRAWAL, REFUND
-  blockTime        Int?
-  slot             Int?
-  createdAt        DateTime      @default(now())
+  id                String        @id @default(cuid())
+  foundingWalletId  String
+  foundingWallet    ProjectWallet @relation(fields: [foundingWalletId], references: [id], onDelete: Cascade)
+  signature         String        @unique
+  fromWallet        String
+  toWallet          String
+  amountLamports    String
+  amountUSD         Float?
+  tokenMint         String?
+  transactionType   String // DEPOSIT, WITHDRAWAL, REFUND
+  blockTime         Int?
+  slot              Int?
+  memo              String? // Memo from transaction
+  projectIdFromMemo String? // Extracted project ID from memo (if MEMOCRACY: format)
+  createdAt         DateTime      @default(now())
 
   @@index([foundingWalletId])
   @@index([fromWallet])
   @@index([signature])
+  @@index([projectIdFromMemo])
 }
 
 model FoundingWalletContributor {
@@ -299,4 +306,133 @@ model FoundingWalletTrustScore {
 
   // Detailed JSON data
   detailedData String? // JSON string with all details
+}
+
+// ============================================
+// Bags API Integration Models
+// ============================================
+
+model BagsCoin {
+  id          String  @id @default(cuid())
+  tokenMint   String  @unique // Bags Token Mint (also Coin.mint)
+  tokenName   String
+  tokenSymbol String
+  description String?
+  image       String?
+
+  // Link to Coin
+  coinId String @unique
+  coin   Coin   @relation(fields: [coinId], references: [id], onDelete: Cascade)
+
+  // Bags API Integration
+  bagsLaunchTxSignature         String? // Token Launch Transaction
+  bagsFeeShareConfigTxSignature String? // Fee Share Config Transaction
+
+  // Platform Fee
+  platformFeePercentage Float  @default(0.03) // 3%
+  platformWallet        String // Memocracy Platform Wallet
+
+  // Creator
+  createdBy String // Wallet that created
+
+  // Relations
+  foundingWallets BagsFoundingWallet[]
+  feeAnalytics    BagsFeeAnalytics?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tokenMint])
+  @@index([createdBy])
+}
+
+model BagsFoundingWallet {
+  id         String   @id @default(cuid())
+  bagsCoinId String
+  bagsCoin   BagsCoin @relation(fields: [bagsCoinId], references: [id], onDelete: Cascade)
+
+  // Wallet Info
+  label              String // e.g., "Development", "Marketing"
+  description        String?
+  walletAddress      String // Where fees are sent (direct from Bags)
+  feeSharePercentage Float // e.g., 0.60 = 60%
+
+  // Funding (optional - for contributions, not fees)
+  fundingGoalUSD         Float?
+  currentBalanceUSD      Float  @default(0) // From contributions (not fees)
+  currentBalanceLamports String @default("0")
+
+  // Status
+  status String @default("ACTIVE") // ACTIVE, COMPLETED, CANCELLED
+
+  // Fee Tracking (read-only from Bags API)
+  lifetimeFees  Float     @default(0) // From Bags Analytics API
+  lastFeeUpdate DateTime?
+
+  // Relations
+  contributors BagsWalletContributor[]
+  transactions BagsWalletTransaction[]
+  polls        Poll[] // Polls for this wallet (via coinId or projectWalletId)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([bagsCoinId])
+  @@index([walletAddress])
+}
+
+model BagsWalletContributor {
+  id               String             @id @default(cuid())
+  foundingWalletId String
+  foundingWallet   BagsFoundingWallet @relation(fields: [foundingWalletId], references: [id], onDelete: Cascade)
+
+  walletAddress            String
+  totalContributedUSD      Float    @default(0)
+  totalContributedLamports String   @default("0")
+  contributionCount        Int      @default(0)
+  firstContributionAt      DateTime
+  lastContributionAt       DateTime
+
+  @@unique([foundingWalletId, walletAddress])
+  @@index([foundingWalletId])
+  @@index([walletAddress])
+}
+
+model BagsWalletTransaction {
+  id               String             @id @default(cuid())
+  foundingWalletId String
+  foundingWallet   BagsFoundingWallet @relation(fields: [foundingWalletId], references: [id], onDelete: Cascade)
+
+  signature         String   @unique
+  fromWallet        String
+  toWallet          String
+  amountLamports    String
+  amountUSD         Float?
+  transactionType   String // DEPOSIT, WITHDRAWAL, REFUND
+  memo              String?
+  projectIdFromMemo String?
+  blockTime         Int?
+  createdAt         DateTime @default(now())
+
+  @@index([foundingWalletId])
+  @@index([signature])
+}
+
+model BagsFeeAnalytics {
+  id         String   @id @default(cuid())
+  bagsCoinId String   @unique
+  bagsCoin   BagsCoin @relation(fields: [bagsCoinId], references: [id], onDelete: Cascade)
+
+  // From Bags Analytics API
+  lifetimeFees Float  @default(0)
+  totalVolume  Float?
+  totalTrades  Int?
+
+  // Per Wallet Distribution (calculated from fee share percentages)
+  walletDistributions String? // JSON: { walletId: amount, ... }
+
+  lastUpdated  DateTime @default(now())
+  nextUpdateAt DateTime // For cron scheduling
+
+  @@index([lastUpdated])
 }

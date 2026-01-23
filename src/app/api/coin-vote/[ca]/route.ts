@@ -4,6 +4,7 @@ import { verifySolanaSignature } from "@/lib/verifySolanaSignature";
 import { rateLimitMiddleware, rateLimitPresets } from "@/lib/rateLimit";
 import { logger } from "@/lib/logger";
 import { safeErrorResponse } from "@/lib/apiHelpers";
+import { getVoteStatsFromChain, checkProgramDeployed } from "@/lib/solanaVoteProgram";
 
 export async function GET(
   request: NextRequest,
@@ -17,7 +18,10 @@ export async function GET(
 
   try {
     const { ca } = params;
+    const { searchParams } = new URL(request.url);
+    const verifyOnChain = searchParams.get("verify") === "true";
 
+    // First, get from database (fast)
     const coin = await prisma.coin.findUnique({
       where: { mint: ca },
       include: {
@@ -36,11 +40,28 @@ export async function GET(
     const downvotes = coin.votes.filter((v: { vote: string }) => v.vote === "DOWN").length;
     const netScore = upvotes - downvotes;
 
+    // Optionally verify with on-chain data
+    let onChainStats = null;
+    if (verifyOnChain) {
+      try {
+        const isDeployed = await checkProgramDeployed();
+        if (isDeployed) {
+          onChainStats = await getVoteStatsFromChain(ca);
+        }
+      } catch (error) {
+        logger.warn("Failed to verify on-chain stats", {
+          coinMint: ca,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
     return NextResponse.json({
       upvotes,
       downvotes,
       netScore,
       totalVotes: coin.votes.length,
+      onChainStats, // Include on-chain stats if requested
     });
   } catch (error) {
     logger.error("Failed to fetch vote stats", {
@@ -60,7 +81,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { coinMint, wallet, vote, signature, nonce } = body;
+    const { coinMint, wallet, vote, signature, nonce, transactionSignature } = body;
 
     // Validate input
     if (!coinMint || !wallet || !vote || !signature || !nonce) {
@@ -78,12 +99,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify signature
-    // Note: verifySolanaSignature expects a specific message format
-    // For coin votes, we use the nonce as the message
+    // The message that was signed matches what the client sends
+    const message = `Vote ${vote} for coin ${coinMint}\nNonce: ${nonce}`;
     const isValid = verifySolanaSignature({
       walletBase58: wallet,
-      nonce: nonce,
       signatureBase58: signature,
+      message: message,
     });
 
     if (!isValid) {
@@ -115,6 +136,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check if on-chain program is deployed
+    const isOnChainDeployed = await checkProgramDeployed();
+    const onChainSynced = isOnChainDeployed && !!transactionSignature;
+
     // Upsert vote (user can change their vote)
     await prisma.coinVote.upsert({
       where: {
@@ -128,6 +153,9 @@ export async function POST(request: NextRequest) {
         sig: signature,
         signedAt: new Date(),
         updatedAt: new Date(),
+        transactionSignature: transactionSignature || null,
+        onChainSynced: onChainSynced,
+        syncedAt: onChainSynced ? new Date() : null,
       },
       create: {
         coinId: coin.id,
@@ -135,6 +163,9 @@ export async function POST(request: NextRequest) {
         vote: vote,
         sig: signature,
         signedAt: new Date(),
+        transactionSignature: transactionSignature || null,
+        onChainSynced: onChainSynced,
+        syncedAt: onChainSynced ? new Date() : null,
       },
     });
 

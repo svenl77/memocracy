@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getWalletBalanceWithUSD } from "@/lib/solanaWalletMonitor";
 import { rateLimitMiddleware, rateLimitPresets } from "@/lib/rateLimit";
 import { logger } from "@/lib/logger";
 import { safeErrorResponse } from "@/lib/apiHelpers";
@@ -31,28 +32,11 @@ export async function GET(
           },
           take: 50,
         },
-        proposals: {
-          orderBy: {
-            createdAt: "desc",
-          },
-          take: 20,
-        },
-        comments: {
-          where: {
-            isVisible: true,
-          },
-          orderBy: {
-            createdAt: "desc",
-          },
-          take: 50,
-        },
         trustScore: true,
         _count: {
           select: {
             transactions: true,
             contributors: true,
-            proposals: true,
-            comments: true,
           },
         },
       },
@@ -69,16 +53,24 @@ export async function GET(
       );
     }
 
+    // Get actual balance from blockchain
+    const actualBalance = await getWalletBalanceWithUSD(wallet.address);
+    const currentBalanceUSD = actualBalance.usd;
+    const currentBalanceLamports = actualBalance.lamports;
+    const actualBalanceSOL = actualBalance.sol;
+
     // Calculate progress
     const fundingGoal = wallet.fundingGoalUSD || 0;
-    const currentBalance = wallet.currentBalanceUSD || 0;
     const progressPercentage =
-      fundingGoal > 0 ? Math.min((currentBalance / fundingGoal) * 100, 100) : 0;
+      fundingGoal > 0 ? Math.min((currentBalanceUSD / fundingGoal) * 100, 100) : 0;
 
     return NextResponse.json({
       ...wallet,
+      currentBalanceUSD, // Live from blockchain
+      currentBalanceLamports, // Live from blockchain
+      actualBalanceSOL, // For display
       progressPercentage,
-      isFullyFunded: fundingGoal > 0 && currentBalance >= fundingGoal,
+      isFullyFunded: fundingGoal > 0 && currentBalanceUSD >= fundingGoal,
     });
   } catch (error) {
     logger.error("Failed to fetch founding wallet", {

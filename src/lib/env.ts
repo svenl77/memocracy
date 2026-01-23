@@ -18,6 +18,9 @@ const envSchema = z.object({
   // Optional: Solana RPC URL (defaults to public mainnet)
   SOLANA_RPC_URL: z.string().url().optional(),
   
+  // Optional: Solana Vote Program ID (for on-chain voting)
+  SOLANA_VOTE_PROGRAM_ID: z.string().optional(),
+  
   // Optional: Cron secret for background jobs
   CRON_SECRET: z.string().optional(),
   
@@ -26,6 +29,13 @@ const envSchema = z.object({
   
   // Optional: Log level
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).optional(),
+  
+  // Bags API Integration
+  BAGS_API_KEY: z.string().optional(),
+  BAGS_API_BASE_URL: z.string().url().optional(),
+  MEMOCRACY_PLATFORM_WALLET: z.string().optional(),
+  MEMOCRACY_PLATFORM_FEE_PERCENTAGE: z.string().regex(/^0\.\d+$/).optional(),
+  BAGS_FEE_SYNC_INTERVAL: z.string().optional(),
 });
 
 // Parse and validate environment variables
@@ -51,9 +61,15 @@ function validateEnv() {
           JWT_SECRET: process.env.JWT_SECRET || 'dev-secret-key-not-for-production-min-32-chars',
           NODE_ENV: (process.env.NODE_ENV as 'development' | 'production' | 'test') || 'development',
           SOLANA_RPC_URL: process.env.SOLANA_RPC_URL,
+          SOLANA_VOTE_PROGRAM_ID: process.env.SOLANA_VOTE_PROGRAM_ID,
           CRON_SECRET: process.env.CRON_SECRET,
           ALLOWED_ORIGIN: process.env.ALLOWED_ORIGIN,
           LOG_LEVEL: process.env.LOG_LEVEL as 'error' | 'warn' | 'info' | 'debug' | undefined,
+          BAGS_API_KEY: process.env.BAGS_API_KEY,
+          BAGS_API_BASE_URL: process.env.BAGS_API_BASE_URL,
+          MEMOCRACY_PLATFORM_WALLET: process.env.MEMOCRACY_PLATFORM_WALLET,
+          MEMOCRACY_PLATFORM_FEE_PERCENTAGE: process.env.MEMOCRACY_PLATFORM_FEE_PERCENTAGE,
+          BAGS_FEE_SYNC_INTERVAL: process.env.BAGS_FEE_SYNC_INTERVAL,
         };
       }
       

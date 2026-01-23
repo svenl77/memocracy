@@ -279,7 +279,6 @@ export async function POST(request: NextRequest) {
     logger.error("Failed to create poll", {
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
-      body: { topic: body.topic, coinId: body.coinId },
     });
     return safeErrorResponse(error, "Failed to create poll");
   }

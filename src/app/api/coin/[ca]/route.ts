@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { Connection, PublicKey } from "@solana/web3.js";
-import { getTokenData } from "@/lib/dexscreener";
+import { getTokenData, getTokenSocialLinks } from "@/lib/dexscreener";
 
 export async function GET(
   request: NextRequest,
@@ -119,6 +119,15 @@ export async function GET(
       const dexscreenerData = await getTokenData(coin.mint);
       
       if (dexscreenerData) {
+        // Get social links
+        let socialLinks = null;
+        try {
+          socialLinks = await getTokenSocialLinks(coin.mint);
+        } catch (error) {
+          console.error("Failed to fetch social links:", error);
+          // Continue without social links
+        }
+
         tokenMetadata = {
           mint: coin.mint,
           name: dexscreenerData.name,
@@ -129,6 +138,11 @@ export async function GET(
           marketCap: dexscreenerData.marketCap,
           liquidity: dexscreenerData.liquidity,
           image: dexscreenerData.image,
+          website: socialLinks?.website,
+          twitter: socialLinks?.twitter,
+          telegram: socialLinks?.telegram,
+          discord: socialLinks?.discord,
+          github: socialLinks?.github,
         };
       }
     } catch (error) {
@@ -227,8 +241,6 @@ export async function GET(
         _count: {
           select: {
             transactions: true,
-            proposals: true,
-            comments: true,
           },
         },
       },
@@ -296,8 +308,6 @@ export async function GET(
         status: wallet.status,
         contributorCount: wallet.contributors.length,
         transactionCount: wallet._count.transactions,
-        proposalCount: wallet._count.proposals,
-        commentCount: wallet._count.comments,
         trustScore: wallet.trustScore,
         createdAt: wallet.createdAt,
       })),

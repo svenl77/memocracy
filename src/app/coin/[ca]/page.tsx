@@ -6,8 +6,8 @@ import Link from "next/link";
 import { format } from "date-fns";
 import TrustScorePreview from "@/components/trustScore/TrustScorePreview";
 import CoinVoteButtons from "@/components/coinVote/CoinVoteButtons";
-import Header from "@/components/Header";
 import FoundingWalletCard from "@/components/foundingWallet/FoundingWalletCard";
+import SocialLinks from "@/components/coin/SocialLinks";
 
 interface TokenMetadata {
   mint: string;
@@ -19,6 +19,11 @@ interface TokenMetadata {
   marketCap?: number;
   liquidity?: number;
   image?: string;
+  website?: string;
+  twitter?: string;
+  telegram?: string;
+  discord?: string;
+  github?: string;
 }
 
 interface Poll {
@@ -93,8 +98,12 @@ interface CoinData {
     status: string;
     contributorCount: number;
     transactionCount: number;
-    proposalCount: number;
-    commentCount: number;
+    coin?: {
+      id: string;
+      mint: string;
+      symbol: string;
+      name: string;
+    } | null;
     trustScore: {
       overallScore: number;
       tier: string;
@@ -123,17 +132,19 @@ export default function CoinDashboard() {
       const data = await response.json();
       
       if (!response.ok) {
-        if (data.suggestion === "create") {
+        if (data.suggestion === "create" && data.mint) {
           setCreateSuggestion(data.mint);
           setError("");
         } else {
-          throw new Error(data.error || "Failed to fetch coin data");
+          // Even if no suggestion, allow creation with the searched address
+          setError(data.error || "Coin not found");
         }
       } else {
         setCoinData(data);
       }
     } catch (error: any) {
       console.error("Failed to fetch coin data:", error);
+      // On error, still allow creation with the searched address
       setError(error.message || "Failed to load coin data");
     } finally {
       setLoading(false);
@@ -180,81 +191,112 @@ export default function CoinDashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-        <Header />
-        <div className="container mx-auto px-4 py-12">
-          <div className="flex justify-center items-center h-64">
-            <div className="text-lg">Loading coin dashboard...</div>
-          </div>
-        </div>
+      <div className="flex justify-center items-center h-64">
+        <div className="text-lg">Loading coin dashboard...</div>
       </div>
     );
   }
 
   // Show "Create Coin" UI if coin doesn't exist
-  if (createSuggestion) {
+  const mintToCreate = createSuggestion || ((error || !coinData) && params.ca ? params.ca as string : null);
+  
+  if (mintToCreate) {
+    const handleCreateCoinFromError = async () => {
+      if (isCreating) return;
+
+      try {
+        setIsCreating(true);
+        setError("");
+        const response = await fetch("/api/coin/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mint: mintToCreate }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Failed to create coin");
+        }
+
+        // Reload the page to show the new coin
+        window.location.reload();
+      } catch (error: any) {
+        console.error("Failed to create coin:", error);
+        setError(error.message || "Failed to create coin");
+        setIsCreating(false);
+      }
+    };
+
     return (
-      <div className="px-4 py-12">
-        <div className="max-w-2xl mx-auto">
-          <div className="bg-white rounded-2xl shadow-xl p-12 text-center border border-gray-200">
-            <div className="mb-6">
+      <div className="max-w-2xl mx-auto">
+        <div className="bg-white rounded-2xl shadow-xl p-12 text-center border border-gray-200">
+          <div className="mb-6">
             <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-blue-100 to-purple-100 mb-4">
               <span className="text-4xl">🔍</span>
             </div>
-              <h2 className="text-3xl font-bold text-gray-900 mb-2">
-                Coin Not Added Yet
-              </h2>
-              <p className="text-gray-600 text-lg">
-                This memecoin hasn't been added to the platform yet. Add it to enable trust score analysis, community voting, and sentiment tracking.
-              </p>
-            </div>
-
-            <div className="bg-gray-50 rounded-xl p-6 mb-6">
-              <p className="text-sm text-gray-600 mb-2">Token Address:</p>
-              <code className="text-sm bg-white px-3 py-2 rounded border border-gray-200 break-all">
-                {createSuggestion}
-              </code>
-            </div>
-
-            <button
-              onClick={handleCreateCoin}
-              disabled={isCreating}
-              className={`
-                px-8 py-4 rounded-xl font-semibold text-lg transition-all transform
-                ${
-                  isCreating
-                    ? "bg-gray-400 cursor-not-allowed"
-                    : "bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 active:scale-95 shadow-lg hover:shadow-xl"
-                }
-                text-white
-              `}
-            >
-              {isCreating ? (
-                <span className="flex items-center gap-2">
-                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  Adding Coin...
-                </span>
-              ) : (
-                "➕ Add Coin to Platform"
-              )}
-            </button>
-
-            <Link
-              href="/"
-              className="block mt-6 text-gray-600 hover:text-gray-900 transition-colors"
-            >
-              ← Back to Memecoin Communities
-            </Link>
-
-            {error && (
-              <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-xl">
-                <p className="text-red-600 text-sm">{error}</p>
-              </div>
-            )}
+            <h2 className="text-3xl font-bold text-gray-900 mb-2">
+              Coin Not Found
+            </h2>
+            <p className="text-gray-600 text-lg">
+              This memecoin hasn't been added to the platform yet. Start a free analysis and create a new community for this coin to enable trust score analysis, community voting, and sentiment tracking.
+            </p>
           </div>
+
+          <div className="bg-gray-50 rounded-xl p-6 mb-6">
+            <p className="text-sm text-gray-600 mb-2">Token Address:</p>
+            <code className="text-sm bg-white px-3 py-2 rounded border border-gray-200 break-all">
+              {mintToCreate}
+            </code>
+          </div>
+
+          <button
+            onClick={createSuggestion ? handleCreateCoin : handleCreateCoinFromError}
+            disabled={isCreating}
+            className={`
+              px-8 py-4 rounded-xl font-semibold text-lg transition-all transform
+              ${
+                isCreating
+                  ? "bg-gray-400 cursor-not-allowed"
+                  : "bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 active:scale-95 shadow-lg hover:shadow-xl"
+              }
+              text-white w-full
+            `}
+          >
+            {isCreating ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                Creating Coin & Running Analysis...
+              </span>
+            ) : (
+              "🚀 Start Free Analysis Now and Create a New Community for this Coin"
+            )}
+          </button>
+
+          <div className="mt-6 p-4 bg-blue-50 rounded-xl border border-blue-200">
+            <p className="text-sm text-blue-800 font-medium mb-2">✨ What you'll get:</p>
+            <ul className="text-sm text-blue-700 text-left space-y-1 list-disc list-inside">
+              <li>Complete Trust Score Analysis</li>
+              <li>Community Voting System</li>
+              <li>Sentiment Tracking</li>
+              <li>Price & Market Data</li>
+            </ul>
+          </div>
+
+          <Link
+            href="/"
+            className="block mt-6 text-gray-600 hover:text-gray-900 transition-colors"
+          >
+            ← Back to Memecoin Communities
+          </Link>
+
+          {error && (
+            <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-xl">
+              <p className="text-red-600 text-sm">{error}</p>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -323,6 +365,16 @@ export default function CoinDashboard() {
                   {coinData.pollType === "COIN" ? "🪙 Token-Gated" : "💳 Contribution-Gated"}
                 </span>
               </div>
+              {/* Social Links - Only for COIN mode */}
+              {coinData.pollType === "COIN" && coinData.tokenMetadata && (
+                <SocialLinks
+                  website={coinData.tokenMetadata.website}
+                  twitter={coinData.tokenMetadata.twitter}
+                  telegram={coinData.tokenMetadata.telegram}
+                  discord={coinData.tokenMetadata.discord}
+                  github={coinData.tokenMetadata.github}
+                />
+              )}
             </div>
           </div>
           <div className="flex flex-col items-end gap-4">
@@ -549,25 +601,6 @@ export default function CoinDashboard() {
             </div>
         </div>
       )}
-
-      {/* Founding Wallets Section */}
-      {coinData.pollType === "COIN" &&
-        coinData.foundingWallets &&
-        coinData.foundingWallets.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-lg p-8 border border-gray-100">
-            <h2 className="text-2xl font-bold text-gray-900 mb-8 flex items-center">
-              <span className="w-8 h-8 bg-gradient-to-br from-purple-500 to-blue-500 rounded-lg flex items-center justify-center text-white text-sm font-bold mr-3">
-                💰
-              </span>
-              Founding Wallets ({coinData.foundingWallets.length})
-            </h2>
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {coinData.foundingWallets.map((wallet) => (
-                <FoundingWalletCard key={wallet.id} wallet={wallet} />
-              ))}
-            </div>
-          </div>
-        )}
 
       {/* Polls List */}
       <div className="bg-white rounded-2xl shadow-lg p-8 border border-gray-100">
