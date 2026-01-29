@@ -30,6 +30,9 @@ export function getTokenImageUrls(tokenAddress: string, symbol?: string): string
 }
 
 // Component for handling image fallbacks with multiple sources
+// Note: This component is not used and contains JSX which requires .tsx file
+// Commented out to allow TypeScript compilation
+/*
 export function TokenImage({ 
   tokenAddress, 
   symbol, 
@@ -72,3 +75,4 @@ export function TokenImage({
     </div>
   );
 }
+*/

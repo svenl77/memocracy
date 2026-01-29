@@ -59,7 +59,7 @@ export async function syncVotesFromChain(coinMint: string): Promise<number> {
 
     // Get all votes for this coin that need syncing
     const votesToSync = coin.votes.filter(
-      (vote) => !vote.onChainSynced || !vote.transactionSignature
+      (vote: any) => !vote.onChainSynced || !vote.transactionSignature
     );
 
     let syncedCount = 0;
@@ -210,8 +210,8 @@ export async function syncVoteStatsFromChain(
       return null;
     }
 
-    const dbUpvotes = coin.votes.filter((v) => v.vote === "UP").length;
-    const dbDownvotes = coin.votes.filter((v) => v.vote === "DOWN").length;
+    const dbUpvotes = coin.votes.filter((v: any) => v.vote === "UP").length;
+    const dbDownvotes = coin.votes.filter((v: any) => v.vote === "DOWN").length;
     const dbNetScore = dbUpvotes - dbDownvotes;
 
     // Get on-chain stats

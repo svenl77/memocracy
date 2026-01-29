@@ -57,6 +57,7 @@ export async function GET(
     const scoreResult = await calculateTrustScore(tokenAddress);
 
     // Save to database if coin exists
+    // Note: detailedData is excluded to avoid TEXT column size limits
     if (coin) {
       await prisma.trustScore.upsert({
         where: { coinId: coin.id },
@@ -73,7 +74,7 @@ export async function GET(
           contractAgeDays: scoreResult.metrics.contractAgeDays,
           liquidityUsd: scoreResult.metrics.liquidityUsd,
           sellPressure24h: scoreResult.metrics.sellPressure24h,
-          detailedData: JSON.stringify(scoreResult.details),
+          detailedData: null, // Don't store detailed data to avoid size limits
           lastChecked: new Date(),
           updatedAt: new Date(),
         },
@@ -91,7 +92,7 @@ export async function GET(
           contractAgeDays: scoreResult.metrics.contractAgeDays,
           liquidityUsd: scoreResult.metrics.liquidityUsd,
           sellPressure24h: scoreResult.metrics.sellPressure24h,
-          detailedData: JSON.stringify(scoreResult.details),
+          detailedData: null, // Don't store detailed data to avoid size limits
         },
       });
     }
@@ -144,7 +145,7 @@ export async function POST(
         contractAgeDays: scoreResult.metrics.contractAgeDays,
         liquidityUsd: scoreResult.metrics.liquidityUsd,
         sellPressure24h: scoreResult.metrics.sellPressure24h,
-        detailedData: JSON.stringify(scoreResult.details),
+        detailedData: null, // Don't store detailed data to avoid size limits
         lastChecked: new Date(),
         updatedAt: new Date(),
       },
@@ -162,7 +163,7 @@ export async function POST(
         contractAgeDays: scoreResult.metrics.contractAgeDays,
         liquidityUsd: scoreResult.metrics.liquidityUsd,
         sellPressure24h: scoreResult.metrics.sellPressure24h,
-        detailedData: JSON.stringify(scoreResult.details),
+        detailedData: null, // Don't store detailed data to avoid size limits
       },
     });
 

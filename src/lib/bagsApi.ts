@@ -105,9 +105,22 @@ export class BagsApiClient {
     }
 
     const url = `${this.baseUrl}${endpoint}`;
+    
+    // Convert headers to Record<string, string>
+    const inputHeaders = options.headers || {};
+    const headersObj: Record<string, string> = {};
+    
+    if (inputHeaders instanceof Headers) {
+      inputHeaders.forEach((value, key) => {
+        headersObj[key] = value;
+      });
+    } else {
+      Object.assign(headersObj, inputHeaders);
+    }
+    
     const headers: Record<string, string> = {
       "x-api-key": this.apiKey,
-      ...options.headers,
+      ...headersObj,
     };
     
     // Only set Content-Type for JSON, not for FormData (browser sets it automatically with boundary)
@@ -207,7 +220,10 @@ export class BagsApiClient {
       // #endregion
       
       // Convert Buffer to Blob for FormData
-      const imageBlob = new Blob([metadata.imageFile], { type: "image/png" });
+      const imageBuffer = Buffer.isBuffer(metadata.imageFile) 
+        ? new Uint8Array(metadata.imageFile) 
+        : metadata.imageFile;
+      const imageBlob = new Blob([imageBuffer], { type: "image/png" });
       formData.append("image", imageBlob, "token-image.png");
     } else if (metadata.image) {
       // Fallback: download from URL

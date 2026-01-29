@@ -170,7 +170,7 @@ export async function getBagsFeeShareInfo(
 
     if (createdByMemocracy && bagsCoin) {
       // For Memocracy-created coins, use our database
-      feeShares = bagsCoin.foundingWallets.map((w) => ({
+      feeShares = bagsCoin.foundingWallets.map((w: any) => ({
         walletAddress: w.walletAddress,
         label: w.label,
         description: w.description || undefined,

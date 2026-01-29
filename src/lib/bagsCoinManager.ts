@@ -312,13 +312,21 @@ export async function getBagsCoinAnalytics(
   // Get lifetime fees from Bags API
   const feesResult = await bagsApi.getTokenLifetimeFees(tokenMint);
 
-  if (!feesResult.success || !feesResult.response) {
+  if (!feesResult.success) {
     throw new Error(
       feesResult.error || "Failed to get lifetime fees from Bags API"
     );
   }
 
-  const lifetimeFees = feesResult.response.lifetimeFees;
+  // Parse lifetime fees - API returns either string (lamports) or object with lifetimeFees
+  const lifetimeFeesLamports = typeof feesResult.response === 'string' 
+    ? (feesResult.response === '' ? 0 : parseFloat(feesResult.response))
+    : (typeof feesResult.response === 'object' && feesResult.response !== null && 'lifetimeFees' in feesResult.response)
+    ? (feesResult.response as any).lifetimeFees || 0
+    : 0;
+  
+  // Convert lamports to SOL (1 SOL = 1e9 lamports)
+  const lifetimeFees = lifetimeFeesLamports / 1e9;
 
   // Calculate per-wallet distribution
   const walletDistributions: Record<string, number> = {};
@@ -332,8 +340,8 @@ export async function getBagsCoinAnalytics(
 
   return {
     lifetimeFees,
-    totalVolume: feesResult.response.totalVolume,
-    totalTrades: feesResult.response.totalTrades,
+    totalVolume: (feesResult.response as any)?.totalVolume,
+    totalTrades: (feesResult.response as any)?.totalTrades,
     walletDistributions,
   };
 }

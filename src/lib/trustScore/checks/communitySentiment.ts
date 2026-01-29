@@ -48,7 +48,7 @@ export async function checkCommunitySentiment(
       return {
         score: marketCapScore,
         rating: marketCapRating,
-        description: marketCapDescription,
+        explanation: marketCapDescription,
         upvotes: 0,
         downvotes: 0,
         totalVotes: 0,
@@ -56,7 +56,7 @@ export async function checkCommunitySentiment(
       };
     }
 
-    const upvotes = coin.votes.filter((v) => v.vote === "UP").length;
+    const upvotes = coin.votes.filter((v: any) => v.vote === "UP").length;
     const totalVotes = coin.votes.length;
     const downvotes = totalVotes - upvotes;
     const approvalRate = upvotes / totalVotes;
@@ -92,7 +92,7 @@ export async function checkCommunitySentiment(
     return {
       score,
       rating,
-      description,
+      explanation: description,
       upvotes,
       downvotes,
       totalVotes,
@@ -103,7 +103,7 @@ export async function checkCommunitySentiment(
     return {
       score: 0,
       rating: "Error",
-      description: "Failed to check community sentiment",
+      explanation: "Failed to check community sentiment",
       upvotes: 0,
       downvotes: 0,
       totalVotes: 0,

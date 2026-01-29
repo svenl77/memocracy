@@ -70,6 +70,17 @@ export interface StabilityDetails {
   explanation: string;
 }
 
+export interface CommunitySentimentResult {
+  score: number;
+  totalVotes?: number;
+  upvotes?: number;
+  downvotes?: number;
+  approvalRate?: number;
+  marketCap?: number;
+  rating: string;
+  explanation: string;
+}
+
 export interface CheckResult {
   score: number;
   details: any;
