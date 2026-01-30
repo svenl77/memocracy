@@ -1117,6 +1117,27 @@ function AdminContent() {
               </p>
             </div>
 
+            {/* Wallet Connection */}
+            <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl border border-blue-200">
+              <h3 className="text-sm font-semibold text-blue-800 mb-3">Wallet Connection</h3>
+              <div className="flex justify-center">
+                <WalletMultiButton className="!bg-gradient-to-r !from-blue-600 !to-purple-600 hover:!from-blue-700 hover:!to-purple-700 !rounded-xl !shadow-lg hover:!shadow-xl !transition-all !duration-200" />
+              </div>
+              {connected && publicKey && (
+                <div className="mt-3 text-center space-y-2">
+                  <p className="text-xs text-blue-700">
+                    Connected: {publicKey.toString().slice(0, 8)}...{publicKey.toString().slice(-8)}
+                  </p>
+                  <button
+                    onClick={disconnect}
+                    className="text-xs text-red-600 hover:text-red-800 underline"
+                  >
+                    Switch Wallet
+                  </button>
+                </div>
+              )}
+            </div>
+
             {foundingWalletMessage && (
               <div
                 className={`p-4 rounded-lg ${
